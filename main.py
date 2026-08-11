@@ -1,5 +1,5 @@
 """
-Moodle Student Analyzer
+MoodlIA Analyzer Desktop
 Punto de entrada principal de la aplicación.
 """
 import sys

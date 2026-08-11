@@ -1,10 +1,10 @@
-# Moodle Student Analyzer
+# MoodlIA Analyzer Desktop
 
-Desktop application for analyzing Moodle course activity, student engagement, grade trends, and follow-up risk.
+Desktop application for analyzing Moodle course activity, student engagement, grade trends, and follow-up risk as part of the MoodlIA ecosystem.
 
 ## Download
 
-Pre-built executables are available from [GitHub Actions](https://github.com/gafapa/stats-moodle/actions):
+Pre-built executables are available from [GitHub Actions](https://github.com/gafapa/moodlia-analyzer-desktop/actions):
 
 | Platform | How to get it |
 |---|---|
@@ -32,24 +32,24 @@ At startup the app asks for the UI language on the first screen. That language s
 
 ### Windows → `dist\MoodleAnalyzer.exe`
 
-Requisitos: Python 3.11+ instalado y en el PATH.
+Requirements: Python 3.11 or newer installed and available on `PATH`.
 
 ```bat
 build.bat
 ```
 
-El script instala las dependencias, limpia artefactos previos y genera `dist\MoodleAnalyzer.exe` con PyInstaller. El `.exe` es autocontenido — no requiere Python ni instalación adicional en la máquina destino.
+The script installs dependencies, cleans previous build artifacts, and generates `dist\MoodleAnalyzer.exe` with PyInstaller. The executable is self-contained and does not require Python on the destination machine.
 
 ---
 
 ### Mac Apple Silicon (M1/M2/M3/M4) → `dist/MoodleAnalyzer`
 
-**Opción A — Build local** (ejecutar en el propio Mac):
+**Option A — Local build** (run on the target Mac):
 
-Requisitos: Python 3.11+ nativo arm64. Verificar antes de compilar:
+Requirements: a native arm64 build of Python 3.11 or newer. Verify it before building:
 ```bash
 python3 -c "import platform; print(platform.machine())"
-# Debe mostrar: arm64
+# Expected output: arm64
 ```
 
 ```bash
@@ -57,20 +57,20 @@ chmod +x build_mac.sh
 ./build_mac.sh
 ```
 
-El ejecutable queda en `dist/MoodleAnalyzer`. La primera vez que se abre en el Mac:
+The executable is written to `dist/MoodleAnalyzer`. Before opening it for the first time:
 ```bash
 xattr -cr dist/MoodleAnalyzer   # quitar bloqueo de Gatekeeper
 ./dist/MoodleAnalyzer
 ```
 
-**Opción B — GitHub Actions** (desde cualquier sistema operativo):
+**Option B — GitHub Actions** (from any operating system):
 
-1. Ir a [Actions → Build Mac Apple Silicon](https://github.com/gafapa/stats-moodle/actions/workflows/build_mac.yml)
-2. Click en **Run workflow** → **Run workflow**
-3. Esperar ~5-10 minutos
-4. Descargar el artefacto `MoodleAnalyzer-mac-arm64` de la página del job
+1. Open [Actions → Build Mac Apple Silicon](https://github.com/gafapa/moodlia-analyzer-desktop/actions/workflows/build_mac.yml).
+2. Select **Run workflow** → **Run workflow**.
+3. Wait approximately 5–10 minutes.
+4. Download the `MoodleAnalyzer-mac-arm64` artifact from the workflow run.
 
-> PyInstaller no puede compilar de forma cruzada: el ejecutable de Windows debe generarse en Windows y el de Mac en macOS.
+> PyInstaller cannot cross-compile: build the Windows executable on Windows and the macOS executable on macOS.
 
 ## Credentials and privacy
 

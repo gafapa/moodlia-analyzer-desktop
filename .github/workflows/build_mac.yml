@@ -1,34 +1,37 @@
-name: Build Mac Apple Silicon
+name: Build macOS Apple Silicon
 
 on:
-  workflow_dispatch:   # se lanza manualmente desde GitHub
+  workflow_dispatch:
 
 jobs:
   build-mac-arm64:
-    runs-on: macos-latest   # runner Apple Silicon (M-series)
+    runs-on: macos-latest
 
     steps:
-      - name: Checkout código
+      - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.11 (arm64)
+      - name: Set up Python 3.11 (arm64)
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           architecture: arm64
 
-      - name: Verificar arquitectura
+      - name: Verify architecture
         run: |
           python3 -c "import platform; print('Python arch:', platform.machine())"
           uname -m
 
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt
           python3 -m pip install "pyinstaller>=6.0.0"
 
-      - name: Compilar ejecutable
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Build executable
         run: |
           python3 -m PyInstaller \
             --onefile \
@@ -50,12 +53,12 @@ jobs:
             --collect-submodules customtkinter \
             main.py
 
-      - name: Verificar binario generado
+      - name: Verify generated binary
         run: |
           file dist/MoodleAnalyzer
           lipo -info dist/MoodleAnalyzer 2>/dev/null || true
 
-      - name: Subir artefacto
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: MoodleAnalyzer-mac-arm64
