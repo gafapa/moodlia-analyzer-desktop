@@ -6,6 +6,7 @@ from src.report_agent import ReportAgent
 class FakeResponse:
     def __init__(self, payload):
         self._payload = payload
+        self.status_code = 200
 
     def raise_for_status(self):
         return None
@@ -22,10 +23,10 @@ class FakeSession:
     def update(self, payload):
         self.headers.update(payload)
 
-    def get(self, url, headers=None, timeout=20):
+    def get(self, url, headers=None, timeout=20, allow_redirects=False):
         return FakeResponse(self.mapping[url])
 
-    def post(self, url, headers=None, json=None, timeout=90):
+    def post(self, url, headers=None, json=None, timeout=90, allow_redirects=False):
         return FakeResponse({
             "choices": [{"message": {"content": "ok"}}],
         })
@@ -82,7 +83,8 @@ class ReportAgentTests(unittest.TestCase):
         result = agent.generate_course_report(sample_analysis())
 
         self.assertEqual(result, "ok")
-        self.assertIn("Curso de ejemplo", agent.prompts[0])
+        self.assertNotIn("Curso de ejemplo", agent.prompts[0])
+        self.assertNotIn("Ana", agent.prompts[0])
         self.assertIn("Tarea 1", agent.prompts[0])
         self.assertIn("\"umbral_aprobado_pct\": 60.0", agent.prompts[0])
 
@@ -94,7 +96,9 @@ class ReportAgentTests(unittest.TestCase):
         result = agent.generate_student_assignment_report(analysis, student, 5)
 
         self.assertEqual(result, "ok")
-        self.assertIn("Ana", agent.prompts[0])
+        self.assertNotIn("Ana", agent.prompts[0])
+        self.assertNotIn("ana@example.com", agent.prompts[0])
+        self.assertIn('"id": 7', agent.prompts[0])
         self.assertIn("Tarea 1", agent.prompts[0])
 
     def test_list_available_models_for_ollama_uses_tags_endpoint(self):

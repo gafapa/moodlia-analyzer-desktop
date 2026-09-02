@@ -1,7 +1,4 @@
-"""
-Gestión de perfiles de conexión persistentes.
-Los perfiles se guardan en ~/.moodle_analyzer/profiles.json
-"""
+"""Persist connection profiles in ~/.moodle_analyzer/profiles.json."""
 import json
 import os
 from datetime import datetime
@@ -14,10 +11,14 @@ PROFILES_FILE = os.path.join(PROFILES_DIR, "profiles.json")
 
 def _ensure_dir():
     os.makedirs(PROFILES_DIR, exist_ok=True)
+    try:
+        os.chmod(PROFILES_DIR, 0o700)
+    except OSError:
+        pass
 
 
 def load_profiles() -> List[Dict]:
-    """Carga la lista de perfiles guardados."""
+    """Load saved profiles."""
     _ensure_dir()
     if not os.path.exists(PROFILES_FILE):
         return []
@@ -30,14 +31,18 @@ def load_profiles() -> List[Dict]:
 
 
 def save_profiles(profiles: List[Dict]):
-    """Guarda la lista completa de perfiles."""
+    """Save the complete profile list."""
     _ensure_dir()
     with open(PROFILES_FILE, "w", encoding="utf-8") as f:
         json.dump({"profiles": profiles}, f, ensure_ascii=False, indent=2)
+    try:
+        os.chmod(PROFILES_FILE, 0o600)
+    except OSError:
+        pass
 
 
 def upsert_profile(name: str, url: str, token: str, username: str = "") -> List[Dict]:
-    """Crea o actualiza un perfil por nombre. Devuelve la lista actualizada."""
+    """Create or update a named profile and return the updated list."""
     profiles = load_profiles()
     existing = next((p for p in profiles if p["name"] == name), None)
     if existing:
@@ -63,14 +68,14 @@ def upsert_profile(name: str, url: str, token: str, username: str = "") -> List[
 
 
 def delete_profile(name: str) -> List[Dict]:
-    """Elimina un perfil por nombre. Devuelve la lista actualizada."""
+    """Delete a named profile and return the updated list."""
     profiles = [p for p in load_profiles() if p["name"] != name]
     save_profiles(profiles)
     return profiles
 
 
 def touch_last_used(name: str):
-    """Actualiza el timestamp de último uso de un perfil."""
+    """Update a profile's last-used timestamp."""
     profiles = load_profiles()
     for p in profiles:
         if p["name"] == name:

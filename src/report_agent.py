@@ -1,7 +1,4 @@
-"""
-Agente dedicado a la generación de informes con IA.
-Usa un endpoint OpenAI-compatible configurado por variables de entorno.
-"""
+"""Generate AI reports through a configured OpenAI-compatible endpoint."""
 import json
 import os
 from datetime import datetime
@@ -11,10 +8,11 @@ import requests
 
 from .ai_settings import load_ai_settings
 from . import i18n
+from .url_security import normalize_service_base_url, reject_redirect
 
 
 class ReportAgentError(Exception):
-    """Error controlado del agente de informes."""
+    """Controlled report-agent error."""
 
 
 class ReportAgent:
@@ -41,9 +39,11 @@ class ReportAgent:
         self.api_key = (api_key if api_key is not None else os.getenv("OPENAI_API_KEY", "")).strip()
         self.model = (model if model is not None else settings.get("model") or os.getenv("OPENAI_MODEL", "")).strip()
         default_base = "http://127.0.0.1:11434" if self.provider == "ollama" else "http://127.0.0.1:1234"
-        self.base_url = (
-            base_url if base_url is not None else settings.get("base_url") or os.getenv("OPENAI_BASE_URL", default_base)
-        ).rstrip("/")
+        raw_base_url = base_url if base_url is not None else settings.get("base_url") or os.getenv("OPENAI_BASE_URL", default_base)
+        try:
+            self.base_url = normalize_service_base_url(raw_base_url, "AI provider URL")
+        except ValueError as exc:
+            raise ReportAgentError(str(exc)) from exc
         self.session = session or requests.Session()
         self.session.headers.update({"User-Agent": "MoodleAnalyzerReportAgent/1.0"})
 
@@ -91,7 +91,8 @@ class ReportAgent:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         try:
-            response = self.session.post(url, headers=headers, json=payload, timeout=90)
+            response = self.session.post(url, headers=headers, json=payload, timeout=90, allow_redirects=False)
+            reject_redirect(response, "AI report request")
             response.raise_for_status()
             data = response.json()
         except requests.exceptions.Timeout as exc:
@@ -99,6 +100,8 @@ class ReportAgent:
         except requests.exceptions.RequestException as exc:
             raise ReportAgentError(f"Error HTTP al generar el informe IA: {exc}") from exc
         except ValueError as exc:
+            if "redirected" in str(exc):
+                raise ReportAgentError(str(exc)) from exc
             raise ReportAgentError("La respuesta del proveedor IA no es JSON válido.") from exc
 
         try:
@@ -140,7 +143,8 @@ class ReportAgent:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         try:
-            response = self.session.get(url, headers=headers, timeout=20)
+            response = self.session.get(url, headers=headers, timeout=20, allow_redirects=False)
+            reject_redirect(response, "AI model request")
             response.raise_for_status()
             data = response.json()
         except requests.exceptions.Timeout as exc:
@@ -148,6 +152,8 @@ class ReportAgent:
         except requests.exceptions.RequestException as exc:
             raise ReportAgentError(f"No se pudieron consultar modelos: {exc}") from exc
         except ValueError as exc:
+            if "redirected" in str(exc):
+                raise ReportAgentError(str(exc)) from exc
             raise ReportAgentError("La lista de modelos no es JSON válido.") from exc
 
         models = []
@@ -203,7 +209,7 @@ class ReportAgent:
         high_risk = sorted(
             (
                 {
-                    "nombre": s.get("fullname", ""),
+                    "id_alumno": s.get("id"),
                     "riesgo": s.get("risk_level"),
                     "prob_suspenso": s.get("prediction", {}).get("risk_probability"),
                     "nota_actual_pct": s.get("metrics", {}).get("final_grade_pct"),
@@ -266,8 +272,6 @@ class ReportAgent:
         course = analysis.get("course", {})
         return {
             "id": course.get("id"),
-            "nombre": course.get("fullname") or course.get("shortname") or "Curso",
-            "categoria": course.get("categoryname"),
             "total_alumnos": analysis.get("course_metrics", {}).get("total_students", 0),
         }
 
@@ -276,8 +280,6 @@ class ReportAgent:
         prediction = student.get("prediction", {})
         return {
             "id": student.get("id"),
-            "nombre": student.get("fullname", ""),
-            "email": student.get("email", ""),
             "riesgo": student.get("risk_level"),
             "factores_riesgo": student.get("risk_factors", []),
             "recomendaciones": student.get("recommendations", []),
@@ -359,12 +361,10 @@ class ReportAgent:
             "tasa_entrega_pct": round((len(submitted) / total_students) * 100, 1)
             if total_students else None,
             "alumnos_pendientes": [
-                student_map[student_id].get("fullname", f"Usuario {student_id}")
-                for student_id in missing_ids[:10]
+                student_id for student_id in missing_ids[:10]
             ],
             "alumnos_con_retraso": [
-                student_map[student_id].get("fullname", f"Usuario {student_id}")
-                for student_id in list(late.keys())[:10]
+                student_id for student_id in list(late.keys())[:10]
             ],
         }
 

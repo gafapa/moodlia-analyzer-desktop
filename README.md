@@ -26,6 +26,8 @@ python main.py
 
 Requirements: Python 3.11+ and access to a Moodle site with REST web services enabled.
 
+Remote Moodle and AI-provider URLs must use HTTPS. HTTP is accepted only for loopback development services. Requests carrying credentials reject redirects.
+
 At startup the app asks for the UI language on the first screen. That language stays fixed for the session.
 
 ## Build
@@ -59,7 +61,7 @@ chmod +x build_mac.sh
 
 The executable is written to `dist/MoodleAnalyzer`. Before opening it for the first time:
 ```bash
-xattr -cr dist/MoodleAnalyzer   # quitar bloqueo de Gatekeeper
+xattr -cr dist/MoodleAnalyzer   # remove the Gatekeeper quarantine flag
 ./dist/MoodleAnalyzer
 ```
 
@@ -81,6 +83,8 @@ Profiles store:
 - Moodle base URL
 - Token (when available)
 - Username (when provided)
+
+The profile file is restricted to the current operating-system user where the platform supports private file permissions. Tokens remain sensitive credentials and should use the minimum Moodle permissions required for analysis.
 
 **Passwords are never persisted.** They are only kept in memory to request a token and are discarded immediately after.
 
@@ -121,6 +125,8 @@ Metrics adapt to what actually exists in each course:
 - Charts — distribution, comparison, correlation, percentile, risk-oriented.
 - AI-assisted reports — for courses, assignments, and individual students (uses active language and configured threshold as context).
 - Static project website + deployable web-server bundle (`prepare_web_release.bat`).
+
+AI report payloads omit student names and email addresses. They contain internal identifiers, course metrics, grades, activity signals, and recommendations required to produce the report.
 
 ## Project website
 

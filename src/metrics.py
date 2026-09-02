@@ -10,7 +10,7 @@ TREND_DECLINING = "empeorando"
 
 
 class StudentMetrics:
-    """Calcula el conjunto de métricas de un alumno."""
+    """Compute the complete metric set for one student."""
 
     def __init__(self, student_data: Dict, course_data: Dict):
         self.s = student_data
@@ -18,10 +18,10 @@ class StudentMetrics:
         self.now = int(time.time())
 
     def compute(self) -> Dict:
-        """Calcula y devuelve todas las métricas como diccionario."""
+        """Compute and return all metrics as a dictionary."""
         m: Dict[str, Any] = {}
 
-        # --- Acceso reciente ---
+        # Recent access
         last = self.s.get("lastaccess", 0)
         m["last_access_ts"] = last
         m["days_since_access"] = max(0, (self.now - last) // 86400) if last else 999
@@ -45,7 +45,7 @@ class StudentMetrics:
             if m["graded_items"] else None
         )
 
-        # Tendencia de calificaciones (pendiente lineal simple)
+        # Grade trend from a simple linear slope.
         m["grade_trend"] = self._compute_grade_trend(m["grade_items"])
 
         # --- Completitud ---
@@ -59,8 +59,8 @@ class StudentMetrics:
         # --- Tareas ---
         assigns = self.course.get("assignments", [])
         subs = self.s.get("submissions", [])
-        # Solo cuentan como "entregadas" las que tienen status="submitted".
-        # Si el campo status no existe (API antigua), se trata como entregada por compatibilidad.
+        # Count only records with status="submitted" as submitted work.
+        # Treat missing status values from older APIs as submitted for compatibility.
         submitted_subs = [
             s for s in subs
             if s.get("status", "submitted") not in ("new", "draft", "reopened")
@@ -89,7 +89,7 @@ class StudentMetrics:
             sum(quiz_scores) / len(quiz_scores) if quiz_scores else None
         )
         m["quiz_trend"] = self._compute_quiz_trend(quiz_scores)
-        # Quizzes únicos con al menos un intento finalizado
+        # Unique quizzes with at least one completed attempt
         _finished_states = ("finished", "gradedright", "gradedwrong", "gradedpartial")
         attempted_quiz_ids = set(
             att.get("quizid") for att in attempts
@@ -134,11 +134,11 @@ class StudentMetrics:
         return m
 
     # ------------------------------------------------------------------
-    # Helpers de métricas
+    # Metric helpers
     # ------------------------------------------------------------------
 
     def _compute_grade_trend(self, items: List[Dict]) -> Optional[str]:
-        """Pendiente de las calificaciones ordenadas por fecha: mejorando/estable/empeorando."""
+        """Classify the slope of date-ordered grades as improving, stable, or declining."""
         dated = [
             (i["gradedate"], i["grade_pct"])
             for i in items
@@ -156,7 +156,7 @@ class StudentMetrics:
         return TREND_STABLE
 
     def _compute_quiz_scores(self, attempts: List[Dict]) -> List[float]:
-        """Devuelve lista de scores (%) por intento completado."""
+        """Return percentage scores for completed attempts."""
         scores = []
         for att in attempts:
             state = att.get("state", "")
@@ -166,7 +166,7 @@ class StudentMetrics:
             quiz_id = att.get("quizid")
             if grade is None:
                 continue
-            # Buscar la nota máxima del quiz
+            # Find the quiz maximum grade
             quizzes = self.course.get("quizzes", [])
             max_grade = next(
                 (q.get("grade", 10) for q in quizzes if q.get("id") == quiz_id),
@@ -203,7 +203,7 @@ class StudentMetrics:
         return late
 
     def _collect_all_timestamps(self) -> List[int]:
-        """Reúne todos los timestamps de actividad disponibles del alumno."""
+        """Collect every available activity timestamp for a student."""
         tss: List[int] = []
         for s in self.s.get("submissions", []):
             t = s.get("timemodified") or s.get("timecreated")
@@ -224,7 +224,7 @@ class StudentMetrics:
         return sorted(set(tss))
 
     def _count_unique_weeks_from_timestamps(self, timestamps: List[int]) -> int:
-        """Número de semanas naturales con alguna actividad registrada."""
+        """Count calendar weeks that contain recorded activity."""
         weeks: set = set()
         for ts in timestamps:
             try:
@@ -237,10 +237,7 @@ class StudentMetrics:
     def _compute_submission_advance(
         self, assigns: List[Dict], submitted_subs: List[Dict]
     ) -> Optional[float]:
-        """
-        Días de antelación media en las entregas.
-        Positivo = entregó antes del plazo.  Negativo = entregó tarde.
-        """
+        """Return mean submission lead time in days; negative values are late."""
         sub_map = {s["assignid"]: s for s in submitted_subs}
         advances: List[float] = []
         for a in assigns:
@@ -256,7 +253,7 @@ class StudentMetrics:
         return round(sum(advances) / len(advances), 1) if advances else None
 
     def _compute_quiz_avg_time(self, attempts: List[Dict]) -> Optional[float]:
-        """Tiempo medio por intento de cuestionario completado (en minutos)."""
+        """Return the average duration of completed quiz attempts in minutes."""
         times: List[float] = []
         for att in attempts:
             start = att.get("timestart", 0)
@@ -266,10 +263,7 @@ class StudentMetrics:
         return round(sum(times) / len(times), 1) if times else None
 
     def _estimate_sessions(self, logs: List[Dict]) -> Tuple[int, float]:
-        """
-        Estima el número de sesiones y su duración media (en minutos)
-        agrupando eventos del log separados más de 30 minutos.
-        """
+        """Estimate session count and mean duration using a 30-minute inactivity gap."""
         tss = sorted([
             lg.get("timecreated") or lg.get("time", 0)
             for lg in logs
@@ -302,31 +296,29 @@ class StudentMetrics:
         return len(days)
 
     def _compute_engagement(self, m: Dict) -> float:
-        """
-        Índice de engagement (0-100) ponderando varios factores.
-        """
+        """Compute a weighted engagement score from 0 to 100."""
         weighted_scores = []
 
-        # Completitud de actividades (25%)
+        # Activity completion (25%).
         if m.get("completion_rate") is not None:
             weighted_scores.append((m["completion_rate"], 0.25))
 
-        # Tasa de entregas (25%)
+        # Submission rate (25%)
         if m.get("submission_rate") is not None:
             weighted_scores.append((m["submission_rate"], 0.25))
 
-        # Acceso reciente (20%)
+        # Recent access (20%)
         days = m["days_since_access"]
         access_score = max(0, 100 - days * (100.0 / 30))  # exactamente 0 a los 30 días sin acceso
         weighted_scores.append((access_score, 0.20))
 
-        # Participación en foros (15%)
+        # Forum participation (15%).
         # Normalizar: 10 posts = 100%
         if m.get("total_forums", 0) > 0:
             forum_score = min(100, m["forum_posts_count"] * 10)
             weighted_scores.append((forum_score, 0.15))
 
-        # Cobertura de cuestionarios (15%): quizzes únicos intentados / total quizzes
+        # Quiz coverage (15%): unique quizzes attempted divided by total quizzes
         quizzes_total = m.get("total_quizzes", 0)
         if quizzes_total > 0:
             quiz_score = min(100, (m.get("quiz_unique_attempted", 0) / quizzes_total) * 100)
@@ -337,9 +329,7 @@ class StudentMetrics:
         return round(min(max(score, 0), 100), 1)
 
     def _compute_academic_score(self, m: Dict) -> float:
-        """
-        Puntuación académica (0-100) basada en calificaciones.
-        """
+        """Compute a grade-based academic score from 0 to 100."""
         scores = []
         if m.get("final_grade_pct") is not None:
             scores.append(m["final_grade_pct"])
@@ -351,7 +341,7 @@ class StudentMetrics:
 
     @staticmethod
     def _linear_slope(x: List[float], y: List[float]) -> float:
-        """Calcula la pendiente de una regresión lineal simple."""
+        """Calculate the slope of a simple linear regression."""
         n = len(x)
         if n < 2:
             return 0.0

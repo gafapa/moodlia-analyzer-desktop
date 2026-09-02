@@ -1,10 +1,9 @@
-"""
-Cliente para la API REST de Moodle.
-Solo usa endpoints de consulta (GET/POST de lectura), nunca de modificación.
-"""
+"""Read-only client for the Moodle REST API."""
 import requests
 import json
 from typing import Optional, List, Dict, Any
+
+from .url_security import normalize_service_base_url, reject_redirect
 
 
 class MoodleAPIError(Exception):
@@ -12,25 +11,24 @@ class MoodleAPIError(Exception):
 
 
 class MoodleClient:
-    """
-    Cliente para la API REST de Moodle.
-    Autenticación mediante token o usuario/contraseña.
-    Solo llamadas de lectura.
-    """
+    """Read-only Moodle REST client with token or credential authentication."""
 
     def __init__(self, base_url: str, token: str):
-        self.base_url = base_url.rstrip("/")
+        try:
+            self.base_url = normalize_service_base_url(base_url, "Moodle URL")
+        except ValueError as exc:
+            raise MoodleAPIError(str(exc)) from exc
         self.token = token
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "MoodleAnalyzer/1.0"})
-        # Info del sitio y usuario autenticado
+        # Authenticated site and user information
         self.site_name = ""
         self.user_id = None
         self.user_fullname = ""
         self._test_connection()
 
     # ------------------------------------------------------------------
-    # Autenticación
+    # Authentication
     # ------------------------------------------------------------------
 
     @classmethod
@@ -41,14 +39,20 @@ class MoodleClient:
         password: str,
         service: str = "moodle_mobile_app",
     ) -> "MoodleClient":
-        """Crea el cliente usando usuario y contraseña (obtiene token automáticamente)."""
-        token_url = f"{base_url.rstrip('/')}/login/token.php"
+        """Create a client from credentials by requesting a Moodle token."""
+        try:
+            normalized_base_url = normalize_service_base_url(base_url, "Moodle URL")
+        except ValueError as exc:
+            raise MoodleAPIError(str(exc)) from exc
+        token_url = f"{normalized_base_url}/login/token.php"
         try:
             resp = requests.post(
                 token_url,
                 data={"username": username, "password": password, "service": service},
                 timeout=30,
+                allow_redirects=False,
             )
+            reject_redirect(resp, "Moodle token request")
             resp.raise_for_status()
             data = resp.json()
             if "error" in data:
@@ -58,20 +62,22 @@ class MoodleClient:
             token = data.get("token")
             if not token:
                 raise MoodleAPIError("No se recibió token del servidor")
-            return cls(base_url, token)
+            return cls(normalized_base_url, token)
         except requests.exceptions.ConnectionError:
             raise MoodleAPIError(f"No se puede conectar a: {base_url}")
         except requests.exceptions.Timeout:
             raise MoodleAPIError("Tiempo de espera agotado al conectar")
         except requests.exceptions.RequestException as e:
             raise MoodleAPIError(f"Error de conexión: {e}")
+        except ValueError as exc:
+            raise MoodleAPIError(str(exc)) from exc
 
     # ------------------------------------------------------------------
-    # Llamada base a la API
+    # Base API request
     # ------------------------------------------------------------------
 
     def _api_call(self, function: str, params: Optional[Dict] = None) -> Any:
-        """Realiza una llamada a la API REST de Moodle."""
+        """Call a Moodle REST function."""
         url = f"{self.base_url}/webservice/rest/server.php"
         payload = {
             "wstoken": self.token,
@@ -82,7 +88,8 @@ class MoodleClient:
             payload.update(self._flatten(params))
 
         try:
-            resp = self.session.post(url, data=payload, timeout=60)
+            resp = self.session.post(url, data=payload, timeout=60, allow_redirects=False)
+            reject_redirect(resp, f"Moodle API request [{function}]")
             resp.raise_for_status()
             result = resp.json()
             if isinstance(result, dict) and "exception" in result:
@@ -97,9 +104,11 @@ class MoodleClient:
             raise MoodleAPIError(f"Error HTTP: {e}")
         except json.JSONDecodeError:
             raise MoodleAPIError("Respuesta inválida del servidor (no es JSON)")
+        except ValueError as exc:
+            raise MoodleAPIError(str(exc)) from exc
 
     def _api_call_safe(self, function: str, params: Optional[Dict] = None, default=None):
-        """Llama a la API y devuelve `default` si falla (en lugar de lanzar excepción)."""
+        """Call the API and return a default value instead of raising on failure."""
         try:
             return self._api_call(function, params)
         except MoodleAPIError:
@@ -107,7 +116,7 @@ class MoodleClient:
 
     @staticmethod
     def _flatten(params: Dict, prefix: str = "") -> Dict:
-        """Convierte dict/listas anidadas al formato de parámetros de Moodle REST."""
+        """Flatten nested dictionaries and lists into Moodle REST parameters."""
         result = {}
         for key, value in params.items():
             full_key = f"{prefix}[{key}]" if prefix else key
@@ -124,7 +133,7 @@ class MoodleClient:
         return result
 
     # ------------------------------------------------------------------
-    # Conexión y sitio
+    # Connection and site
     # ------------------------------------------------------------------
 
     def _test_connection(self):
@@ -137,19 +146,18 @@ class MoodleClient:
         return self._api_call("core_webservice_get_site_info")
 
     # ------------------------------------------------------------------
-    # Cursos
+    # Courses
     # ------------------------------------------------------------------
 
     def get_my_courses(self) -> List[Dict]:
-        """Cursos accesibles para el usuario autenticado.
+        """Return courses accessible to the authenticated user.
 
-        Prueba tres endpoints en orden, devolviendo el primero que funcione:
-          1. core_enrol_get_my_courses       — matrícula genérica (alumno/docente)
-          2. core_enrol_get_users_courses    — cursos donde el usuario tiene ROL
-                                              (cubre profesores y creadores de curso)
-          3. core_course_get_courses         — todos los cursos (requiere admin)
+        Try three endpoints in order and return the first successful result:
+          1. core_enrol_get_my_courses for general student or teacher enrollment.
+          2. core_enrol_get_users_courses for explicit user course roles.
+          3. core_course_get_courses for privileged site-wide access.
         """
-        # Intento 1: matriculados en sentido amplio
+        # Attempt 1: broadly enrolled courses
         result = self._api_call_safe(
             "core_enrol_get_my_courses",
             {"returnusercount": 1},
@@ -160,7 +168,7 @@ class MoodleClient:
             if courses:
                 return courses
 
-        # Intento 2: cursos por userid (funciona para profesores y creadores)
+        # Attempt 2: courses by user id, including teachers and course creators
         if self.user_id:
             result = self._api_call_safe(
                 "core_enrol_get_users_courses",
@@ -172,18 +180,18 @@ class MoodleClient:
                 if courses:
                     return courses
 
-        # Intento 3: todos los cursos del sitio (admin)
+        # Attempt 3: all site courses for privileged users
         return self.get_all_courses()
 
     def get_all_courses(self) -> List[Dict]:
-        """Todos los cursos (requiere permisos de administrador o gestor)."""
+        """Return all courses when the user has manager or administrator access."""
         result = self._api_call_safe("core_course_get_courses", default=[])
         if isinstance(result, list):
             return [c for c in result if c.get("id", 0) > 1]
         return []
 
     def get_enrollment_count(self, course_id: int) -> int:
-        """Número de usuarios matriculados en un curso."""
+        """Return the enrolled-user count for a course."""
         users = self._api_call_safe(
             "core_enrol_get_enrolled_users",
             {"courseid": course_id},
@@ -192,46 +200,41 @@ class MoodleClient:
         return len(users) if isinstance(users, list) else 0
 
     def get_courses(self) -> List[Dict]:
-        """
-        Devuelve los cursos disponibles.
-        get_my_courses() ya incluye enrolledusercount (returnusercount=1).
-        Para get_all_courses() el enriquecimiento se hace de forma progresiva
-        en la UI para no bloquear la carga inicial.
-        """
+        """Return available courses without blocking on enrollment enrichment."""
         courses = self.get_my_courses()
         if not courses:
             courses = self.get_all_courses()
         return courses
 
     def get_course_contents(self, course_id: int) -> List[Dict]:
-        """Estructura del curso: secciones y actividades."""
+        """Return course sections and activities."""
         return self._api_call_safe(
             "core_course_get_contents", {"courseid": course_id}, default=[]
         )
 
     # ------------------------------------------------------------------
-    # Usuarios / Matriculaciones
+    # Users and enrollment
     # ------------------------------------------------------------------
 
     def get_enrolled_users(self, course_id: int) -> List[Dict]:
-        """Usuarios matriculados en un curso."""
+        """Return users enrolled in a course."""
         return self._api_call_safe(
             "core_enrol_get_enrolled_users", {"courseid": course_id}, default=[]
         )
 
     def get_course_user_profiles(self, course_id: int, user_ids: List[int]) -> List[Dict]:
-        """Perfiles completos de usuarios en un curso."""
+        """Return complete user profiles for a course."""
         params: Dict[str, Any] = {"courseid": course_id}
         for i, uid in enumerate(user_ids):
             params[f"userids[{i}]"] = uid
         return self._api_call_safe("core_user_get_course_user_profiles", params, default=[])
 
     # ------------------------------------------------------------------
-    # Calificaciones
+    # Grades
     # ------------------------------------------------------------------
 
     def get_grade_items_for_user(self, course_id: int, user_id: int) -> Dict:
-        """Items de calificación para un usuario en un curso."""
+        """Return grade items for one user in a course."""
         return self._api_call_safe(
             "gradereport_user_get_grade_items",
             {"courseid": course_id, "userid": user_id},
@@ -239,14 +242,14 @@ class MoodleClient:
         )
 
     def get_grades(self, course_id: int, user_ids: List[int]) -> Dict:
-        """Calificaciones para múltiples usuarios (API simplificada)."""
+        """Return grades for multiple users through the simplified API."""
         params: Dict[str, Any] = {"courseid": course_id}
         for i, uid in enumerate(user_ids):
             params[f"userids[{i}]"] = uid
         return self._api_call_safe("core_grades_get_grades", params, default={})
 
     def get_gradebook_overview(self, course_id: int) -> List[Dict]:
-        """Vista general del libro de calificaciones."""
+        """Return the gradebook overview for the authenticated user."""
         result = self._api_call_safe(
             "gradereport_overview_get_course_grades",
             {"userid": self.user_id},
@@ -255,11 +258,11 @@ class MoodleClient:
         return result.get("grades", []) if isinstance(result, dict) else []
 
     # ------------------------------------------------------------------
-    # Completitud de actividades
+    # Activity completion
     # ------------------------------------------------------------------
 
     def get_activities_completion(self, course_id: int, user_id: int) -> Dict:
-        """Estado de completitud de actividades para un usuario."""
+        """Return activity completion status for one user."""
         return self._api_call_safe(
             "core_completion_get_activities_completion_status",
             {"courseid": course_id, "userid": user_id},
@@ -267,7 +270,7 @@ class MoodleClient:
         )
 
     def get_course_completion_status(self, course_id: int, user_id: int) -> Dict:
-        """Completitud global del curso para un usuario."""
+        """Return course completion information for one user."""
         return self._api_call_safe(
             "core_completion_get_course_completion_status",
             {"courseid": course_id, "userid": user_id},
@@ -275,11 +278,11 @@ class MoodleClient:
         )
 
     # ------------------------------------------------------------------
-    # Tareas (Assignments)
+    # Assignments
     # ------------------------------------------------------------------
 
     def get_assignments(self, course_id: int) -> List[Dict]:
-        """Tareas del curso."""
+        """Return course assignments."""
         result = self._api_call_safe(
             "mod_assign_get_assignments",
             {"courseids[0]": course_id},
@@ -289,7 +292,7 @@ class MoodleClient:
         return courses[0].get("assignments", []) if courses else []
 
     def get_submissions(self, assign_id: int) -> List[Dict]:
-        """Entregas de una tarea."""
+        """Return submissions for an assignment."""
         result = self._api_call_safe(
             "mod_assign_get_submissions",
             {"assignmentids[0]": assign_id},
@@ -299,7 +302,7 @@ class MoodleClient:
         return assignments[0].get("submissions", []) if assignments else []
 
     def get_submission_statuses(self, assign_id: int) -> List[Dict]:
-        """Estado de entrega por usuario para una tarea."""
+        """Return one user's submission status for an assignment."""
         result = self._api_call_safe(
             "mod_assign_get_submission_status",
             {"assignid": assign_id},
@@ -308,11 +311,11 @@ class MoodleClient:
         return result if isinstance(result, list) else []
 
     # ------------------------------------------------------------------
-    # Cuestionarios (Quizzes)
+    # Quizzes
     # ------------------------------------------------------------------
 
     def get_quizzes(self, course_id: int) -> List[Dict]:
-        """Cuestionarios del curso."""
+        """Return course quizzes."""
         result = self._api_call_safe(
             "mod_quiz_get_quizzes_by_courses",
             {"courseids[0]": course_id},
@@ -321,7 +324,7 @@ class MoodleClient:
         return result.get("quizzes", []) if isinstance(result, dict) else []
 
     def get_user_attempts(self, quiz_id: int, user_id: int = 0) -> List[Dict]:
-        """Intentos de un cuestionario. user_id=0 para todos."""
+        """Return quiz attempts, using user_id=0 for all users."""
         params: Dict[str, Any] = {"quizid": quiz_id}
         if user_id:
             params["userid"] = user_id
@@ -329,7 +332,7 @@ class MoodleClient:
         return result.get("attempts", []) if isinstance(result, dict) else []
 
     def get_quiz_attempt_review(self, attempt_id: int) -> Dict:
-        """Revisión de un intento de cuestionario."""
+        """Return the review of a quiz attempt."""
         return self._api_call_safe(
             "mod_quiz_get_attempt_review",
             {"attemptid": attempt_id},
@@ -337,11 +340,11 @@ class MoodleClient:
         )
 
     # ------------------------------------------------------------------
-    # Foros
+    # Forums
     # ------------------------------------------------------------------
 
     def get_forums(self, course_id: int) -> List[Dict]:
-        """Foros del curso."""
+        """Return course forums."""
         return self._api_call_safe(
             "mod_forum_get_forums_by_courses",
             {"courseids[0]": course_id},
@@ -349,7 +352,7 @@ class MoodleClient:
         )
 
     def get_forum_discussions(self, forum_id: int, page: int = 0, per_page: int = 100) -> List[Dict]:
-        """Discusiones de un foro."""
+        """Return discussions for a forum."""
         result = self._api_call_safe(
             "mod_forum_get_forum_discussions",
             {"forumid": forum_id, "page": page, "perpage": per_page},
@@ -362,7 +365,7 @@ class MoodleClient:
         return []
 
     def get_discussion_posts(self, discussion_id: int) -> List[Dict]:
-        """Posts de una discusión de foro."""
+        """Return posts from a forum discussion."""
         result = self._api_call_safe(
             "mod_forum_get_forum_discussion_posts",
             {"discussionid": discussion_id},
@@ -371,7 +374,7 @@ class MoodleClient:
         return result.get("posts", []) if isinstance(result, dict) else []
 
     # ------------------------------------------------------------------
-    # Logs de actividad
+    # Activity logs
     # ------------------------------------------------------------------
 
     def get_user_logs(
@@ -382,10 +385,7 @@ class MoodleClient:
         modname: str = "",
         action: str = "",
     ) -> List[Dict]:
-        """
-        Logs de actividad (requiere permisos de admin/gestor en muchas instalaciones).
-        Devuelve lista vacía si no hay permisos.
-        """
+        """Return activity logs, or an empty list when permissions are unavailable."""
         params: Dict[str, Any] = {"courseid": course_id, "edulevel": -1}
         if user_id:
             params["userid"] = user_id
@@ -403,7 +403,7 @@ class MoodleClient:
         return []
 
     def get_insights(self, course_id: int) -> List[Dict]:
-        """Predicciones/insights de Moodle (si está habilitado analytics)."""
+        """Return Moodle predictions and insights when analytics is enabled."""
         result = self._api_call_safe(
             "tool_analytics_potential_contexts",
             {"modelid": 1},
@@ -412,11 +412,11 @@ class MoodleClient:
         return result if isinstance(result, list) else []
 
     # ------------------------------------------------------------------
-    # Recursos y módulos
+    # Resources and modules
     # ------------------------------------------------------------------
 
     def get_course_module(self, cm_id: int) -> Dict:
-        """Información de un módulo de curso."""
+        """Return course-module information."""
         return self._api_call_safe(
             "core_course_get_course_module",
             {"cmid": cm_id},
@@ -424,7 +424,7 @@ class MoodleClient:
         )
 
     def get_pages(self, course_id: int) -> List[Dict]:
-        """Páginas de contenido del curso."""
+        """Return course page resources."""
         result = self._api_call_safe(
             "mod_page_get_pages_by_courses",
             {"courseids[0]": course_id},
@@ -433,7 +433,7 @@ class MoodleClient:
         return result.get("pages", []) if isinstance(result, dict) else []
 
     def get_resources(self, course_id: int) -> List[Dict]:
-        """Recursos (ficheros) del curso."""
+        """Return course file resources."""
         result = self._api_call_safe(
             "mod_resource_get_resources_by_courses",
             {"courseids[0]": course_id},

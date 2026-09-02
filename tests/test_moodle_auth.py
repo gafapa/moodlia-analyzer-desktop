@@ -8,8 +8,9 @@ from src.moodle_client import MoodleAPIError, MoodleClient
 
 
 class FakeResponse:
-    def __init__(self, payload):
+    def __init__(self, payload, status_code=200):
         self._payload = payload
+        self.status_code = status_code
 
     def raise_for_status(self):
         return None
@@ -31,6 +32,7 @@ class MoodleAuthTests(unittest.TestCase):
         self.assertEqual(client.base_url, "https://moodle.example.com")
         self.assertEqual(client.token, "abc123")
         self.assertEqual(post.call_args.kwargs["data"]["service"], "moodle_mobile_app")
+        self.assertFalse(post.call_args.kwargs["allow_redirects"])
         self.assertEqual(post.call_args.args[0], "https://moodle.example.com/login/token.php")
 
     def test_from_credentials_surfaces_moodle_error_message(self):
@@ -39,6 +41,27 @@ class MoodleAuthTests(unittest.TestCase):
                 MoodleClient.from_credentials("https://moodle.example.com", "teacher", "bad-secret")
 
         self.assertIn("Invalid login", str(ctx.exception))
+
+    def test_rejects_insecure_remote_urls_before_sending_credentials(self):
+        with mock.patch("src.moodle_client.requests.post") as post:
+            with self.assertRaisesRegex(MoodleAPIError, "HTTPS"):
+                MoodleClient.from_credentials("http://moodle.example.com", "teacher", "secret")
+            with self.assertRaisesRegex(MoodleAPIError, "embedded credentials"):
+                MoodleClient.from_credentials("https://teacher:secret@moodle.example.com", "teacher", "secret")
+        post.assert_not_called()
+
+    def test_allows_loopback_http_for_local_development(self):
+        with mock.patch.object(MoodleClient, "_test_connection", return_value=None):
+            client = MoodleClient("http://127.0.0.1:8080/moodle/", "token")
+        self.assertEqual(client.base_url, "http://127.0.0.1:8080/moodle")
+
+    def test_rejects_token_request_redirects(self):
+        with mock.patch(
+            "src.moodle_client.requests.post",
+            return_value=FakeResponse({}, status_code=307),
+        ):
+            with self.assertRaisesRegex(MoodleAPIError, "redirected"):
+                MoodleClient.from_credentials("https://moodle.example.com", "teacher", "secret")
 
     def test_profiles_can_store_username_without_password(self):
         with tempfile.TemporaryDirectory() as tmpdir:

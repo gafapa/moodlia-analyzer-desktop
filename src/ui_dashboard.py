@@ -19,7 +19,7 @@ T = i18n.translate_text
 
 
 # ============================================================
-# Panel de selección de curso
+# Course selection panel
 # ============================================================
 
 class CourseSelectionPanel(ctk.CTkFrame):
@@ -45,12 +45,12 @@ class CourseSelectionPanel(ctk.CTkFrame):
         self._load_courses()
 
     def destroy(self):
-        """Marca el panel como destruido para evitar callbacks huérfanos."""
+        """Mark the panel as destroyed so callbacks cannot target a stale widget."""
         self._alive = False
         super().destroy()
 
     def _safe_after(self, ms, fn):
-        """Programa fn en el event loop solo si el widget sigue vivo."""
+        """Schedule a callback only while the widget remains alive."""
         if self._alive:
             try:
                 self.after(ms, fn)
@@ -83,7 +83,7 @@ class CourseSelectionPanel(ctk.CTkFrame):
                       text_color=C["fg"], width=110, height=34,
                       corner_radius=8, font=("Segoe UI", 12)).pack(side="right")
 
-        # ── Selector de fuente de cursos ──
+        # Course source selector
         self._mode_btn = ctk.CTkSegmentedButton(
             self,
             values=[self._mode_mine_label, self._mode_all_label],
@@ -100,7 +100,7 @@ class CourseSelectionPanel(ctk.CTkFrame):
         self._mode_btn.set(self._mode_mine_label)
         self._mode_btn.pack(fill="x", padx=18, pady=(10, 0))
 
-        # ── Tabs principales: Cursos | Análisis Global ──
+        # Main tabs: courses and global analysis.
         self._tabs = ctk.CTkTabview(
             self,
             fg_color=C["bg_card"],
@@ -189,7 +189,7 @@ class CourseSelectionPanel(ctk.CTkFrame):
         self._tree.tag_configure("even", background=C["bg_card"])
         self._tree.tag_configure("odd", background="#f1f5f9")
 
-    # ── Tab: Análisis Global ──
+    # Global analysis tab.
 
     def _on_tab_change(self):
         tab = self._tabs.get()
@@ -215,7 +215,7 @@ class CourseSelectionPanel(ctk.CTkFrame):
         right_f.grid(row=0, column=1, padx=(4, 0), pady=4, sticky="nsew")
         right_f.show_figure(charts_course.chart_all_courses_categories(self._courses))
 
-    # ── Carga de cursos ──
+    # Course loading
 
     def _on_course_mode_changed(self, mode: str):
         self._course_mode = mode
@@ -261,7 +261,7 @@ class CourseSelectionPanel(ctk.CTkFrame):
         self._status.configure(
             text=f"✅ {len(courses)} curso(s) encontrado(s)", text_color=C["low"])
         self._render_courses(courses)
-        # Carga progresiva de matrículas faltantes
+        # Progressive loading of missing enrollment counts
         missing = [c for c in courses if c.get("enrolledusercount") is None]
         if missing:
             self._load_enrollment_counts(request_id, missing)
@@ -269,7 +269,7 @@ class CourseSelectionPanel(ctk.CTkFrame):
             self._build_analysis_tab(self._tabs.tab(self._analysis_tab_label))
 
     def _load_enrollment_counts(self, request_id: int, missing: List[Dict]):
-        """Carga el número de matriculados en background, fila a fila."""
+        """Load enrollment counts in the background, one row at a time."""
         total = len(missing)
 
         def fetch_all():
@@ -349,7 +349,7 @@ class CourseSelectionPanel(ctk.CTkFrame):
 
 
 # ============================================================
-# Panel de progreso
+# Progress panel
 # ============================================================
 
 class LoadingPanel(ctk.CTkFrame):
@@ -386,7 +386,7 @@ class LoadingPanel(ctk.CTkFrame):
 
 
 # ============================================================
-# Dashboard del curso
+# Course dashboard
 # ============================================================
 
 class DashboardPanel(ctk.CTkFrame):
@@ -469,7 +469,7 @@ class DashboardPanel(ctk.CTkFrame):
         body = ctk.CTkFrame(self, fg_color=C["bg"], corner_radius=0)
         body.pack(fill="both", expand=True)
 
-        # ── Sidebar alumnos ──
+        # Student sidebar
         sidebar = ctk.CTkFrame(body, fg_color=C["bg_sidebar"], corner_radius=0, width=280)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
@@ -478,7 +478,7 @@ class DashboardPanel(ctk.CTkFrame):
                      font=("Segoe UI", 13, "bold"),
                      text_color=C["fg"]).pack(anchor="w", padx=12, pady=(10, 4))
 
-        # Filtro riesgo
+        # Risk filter
         self._risk_filter = ctk.CTkSegmentedButton(
             sidebar,
             values=[T("Todos"), "🔴", "🟡", "🟢"],
@@ -495,7 +495,7 @@ class DashboardPanel(ctk.CTkFrame):
         self._risk_filter.set(T("Todos"))
         self._risk_filter.pack(fill="x", padx=8, pady=(0, 6))
 
-        # Búsqueda
+        # Search
         self._student_search = tk.StringVar()
         self._student_search.trace("w", lambda *_: self._apply_filter())
         ctk.CTkEntry(sidebar, textvariable=self._student_search,
@@ -563,14 +563,14 @@ class DashboardPanel(ctk.CTkFrame):
             self.after(120, self._load_first_chart_if_needed)
 
     def _load_first_chart_if_needed(self):
-        """Carga la primera gráfica al entrar al tab por primera vez."""
+        """Load the first chart when the tab is opened for the first time."""
         if self._chart_builders and self._current_chart_name is None:
             first = next(iter(self._chart_sel_buttons))
             self._select_chart(first)
 
     def _select_chart(self, name: str):
-        """Selecciona y muestra la gráfica indicada (con caché)."""
-        # Actualizar estado visual de botones
+        """Select and render the requested chart with caching."""
+        # Update button visual states
         for btn_name, btn in self._chart_sel_buttons.items():
             if btn_name == name:
                 btn.configure(fg_color=C["accent"], text_color="white",
@@ -585,7 +585,7 @@ class DashboardPanel(ctk.CTkFrame):
 
         self._current_chart_name = name
 
-        # Obtener figura de la caché o construirla
+        # Load the figure from cache or build it
         if name not in self._chart_cache:
             builder = self._chart_builders.get(name)
             if builder is None:
@@ -595,7 +595,7 @@ class DashboardPanel(ctk.CTkFrame):
         if self._chart_frame_single:
             self._chart_frame_single.show_figure(self._chart_cache[name])
 
-    # ── Lista de alumnos ──
+    # Student list
 
     def _populate_students(self):
         for f in self._student_row_frames:
@@ -620,7 +620,7 @@ class DashboardPanel(ctk.CTkFrame):
             row.pack(fill="x", pady=2)
             row.pack_propagate(False)
 
-            # Barra de color lateral
+            # Side color bar.
             bar = ctk.CTkFrame(row, fg_color=color, corner_radius=3, width=4)
             bar.pack(side="left", fill="y", padx=(4, 6), pady=4)
 
@@ -661,7 +661,7 @@ class DashboardPanel(ctk.CTkFrame):
     def _on_student_click_ctk(self, student):
         old_id = self._selected_student_id
         self._selected_student_id = student["id"]
-        # Actualizar colores de filas
+        # Update row colors
         for i, s in enumerate(self._filtered_students):
             if i < len(self._student_row_frames):
                 fr = self._student_row_frames[i]
@@ -753,7 +753,7 @@ class DashboardPanel(ctk.CTkFrame):
                               corner_radius=6,
                               font=("Segoe UI", 11)).pack(side="right", padx=10, pady=8)
 
-    # ── Tab Gráficas ──
+    # Charts tab
 
     def _build_charts_tab(self, parent):
         cm = self._analysis.get("course_metrics", {})
@@ -782,7 +782,7 @@ class DashboardPanel(ctk.CTkFrame):
         ])
         ROW_SIZE = 8  # primera fila: 8 botones; segunda: 7
 
-        # ── Selector: 2 filas de botones ──────────────────────────
+        # Selector with two rows of buttons.
         sel_outer = ctk.CTkFrame(parent, fg_color=C["bg_sidebar"], corner_radius=8)
         sel_outer.pack(fill="x", padx=4, pady=(4, 0))
 
@@ -807,7 +807,7 @@ class DashboardPanel(ctk.CTkFrame):
                 self._chart_sel_buttons[title] = btn
                 self._chart_builders[title] = builder
 
-        # ── Área de contenido única ───────────────────────────────
+        # Shared content area.
         self._chart_frame_single = ChartFrame(parent)
         self._chart_frame_single.pack(fill="both", expand=True, padx=4, pady=(4, 4))
 

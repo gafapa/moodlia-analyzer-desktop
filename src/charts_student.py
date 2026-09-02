@@ -17,20 +17,17 @@ from .charts_base import COLORS, RISK_PALETTE, _apply_dark_style, _kde_line, _dr
 
 
 # ============================================================
-# Gráficas de detalle de alumno
+# Student detail charts
 # ============================================================
 
 def chart_student_radar(metrics: Dict, figsize=(4.5, 4.5),
                          course_avg_metrics: Optional[Dict] = None) -> Figure:
-    """
-    Gráfica radar/araña. Doble capa de relleno para efecto glow suave.
-    Si se pasa course_avg_metrics, dibuja una segunda línea con la media de la clase.
-    """
+    """Plot a radar chart and optionally compare it with course averages."""
     def metric_or_zero(key: str) -> float:
         value = metrics.get(key)
         return float(value) if value is not None else 0.0
 
-    # Pares (etiqueta_visual, metric_key) según componentes disponibles
+    # Visual label and metric key pairs for available components.
     axes_def = [("Engagement", "engagement_score")]
     if (metrics.get("total_activities") or 0) > 0:
         axes_def.append(("Completitud", "completion_rate"))
@@ -62,7 +59,7 @@ def chart_student_radar(metrics: Dict, figsize=(4.5, 4.5),
     ax.yaxis.set_major_locator(mticker.MultipleLocator(20))
     ax.grid(color=COLORS["grid"], linestyle="-", linewidth=0.4, alpha=0.5)
 
-    # Media de la clase (si disponible) — se dibuja debajo del alumno
+    # Draw the class average below the student series when available
     has_avg = course_avg_metrics is not None
     if has_avg:
         avg_values = [float(course_avg_metrics.get(k) or 0) for k in metric_keys]
@@ -73,12 +70,12 @@ def chart_student_radar(metrics: Dict, figsize=(4.5, 4.5),
 
     # Relleno exterior (glow)
     ax.fill(angles, values_plot, color=COLORS["primary"], alpha=0.12)
-    # Relleno interior más opaco
+    # More opaque inner fill.
     ax.fill(angles, values_plot, color=COLORS["primary"], alpha=0.25)
-    # Línea principal del alumno
+    # Main student series
     ax.plot(angles, values_plot, color=COLORS["primary"],
             linewidth=2.5, solid_capstyle="round", label="Alumno")
-    # Puntos en vértices
+    # Vertex markers.
     ax.scatter(angles[:-1], values, color=COLORS["accent"],
                s=55, zorder=5, edgecolors=COLORS["bg"], linewidths=1)
 
@@ -96,9 +93,7 @@ def chart_student_radar(metrics: Dict, figsize=(4.5, 4.5),
 
 
 def chart_student_grade_timeline(metrics: Dict, figsize=(6, 3), pass_threshold_pct: float = 50.0) -> Figure:
-    """
-    Línea de tiempo de calificaciones con relleno degradado bajo la curva.
-    """
+    """Plot the grade timeline with a gradient fill below the curve."""
     items = metrics.get("grade_items", [])
     dated = [
         (i["gradedate"], i["grade_pct"], i["name"])
@@ -122,17 +117,17 @@ def chart_student_grade_timeline(metrics: Dict, figsize=(6, 3), pass_threshold_p
     grades = [d[1] for d in dated]
     names  = [d[2] for d in dated]
 
-    # Zonas de suspenso (rojo tenue) y aprobado (verde tenue)
+    # Subtle failing and passing regions.
     ax.axhspan(0, pass_threshold_pct, alpha=0.04, color=COLORS["alto"])
     ax.axhspan(pass_threshold_pct, 100, alpha=0.04, color=COLORS["bajo"])
     ax.axhline(pass_threshold_pct, color=COLORS["medio"], linestyle="--",
                linewidth=1.2, alpha=0.65, label=f"Aprobado ({pass_threshold_pct:.0f}%)")
 
-    # Relleno degradado bajo la línea
+    # Gradient fill below the line
     ax.fill_between(dates, grades, 0, alpha=0.15, color=COLORS["primary"], zorder=1)
     ax.fill_between(dates, grades, 0, alpha=0.07, color=COLORS["primary"], zorder=1)
 
-    # Línea principal
+    # Main line.
     ax.plot(dates, grades, color=COLORS["primary"], linewidth=2.5,
             marker="o", markersize=7, markerfacecolor=COLORS["accent"],
             markeredgecolor=COLORS["bg"], markeredgewidth=1.2, zorder=3)
@@ -164,7 +159,7 @@ def chart_student_grade_timeline(metrics: Dict, figsize=(6, 3), pass_threshold_p
 
 
 def chart_student_activity_bars(metrics: Dict, figsize=(5, 3.5)) -> Figure:
-    """Barras de métricas del alumno con colores semafóricos."""
+    """Render student metric bars with traffic-light colors."""
     def metric_or_zero(key: str) -> float:
         value = metrics.get(key)
         return float(value) if value is not None else 0.0
@@ -217,7 +212,7 @@ def chart_student_activity_bars(metrics: Dict, figsize=(5, 3.5)) -> Figure:
 
 def chart_student_quiz_history(attempts: List[Dict], quizzes: List[Dict],
                                 figsize=(5, 3), pass_threshold_pct: float = 50.0) -> Figure:
-    """Barras de resultados de cuestionarios."""
+    """Render quiz result bars."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -284,11 +279,7 @@ def chart_student_quiz_history(attempts: List[Dict], quizzes: List[Dict],
 def chart_student_submissions_timeline(
     submissions: List[Dict], assignments: List[Dict], figsize=(9, 5)
 ) -> Figure:
-    """
-    Línea de tiempo de entregas vs fechas límite.
-    Muestra TODAS las tareas del curso.
-    Verde=a tiempo  |  Rojo=tarde/sin entregar  |  Naranja=borrador.
-    """
+    """Plot every assignment submission against its due date and status."""
     if not assignments:
         fig, ax = plt.subplots(figsize=figsize)
         _apply_dark_style(fig, ax)
@@ -371,10 +362,7 @@ def chart_student_submissions_timeline(
 
 def chart_prediction_gauge(prediction: Dict, metrics: Dict,
                             figsize=(5, 3.2), pass_threshold_pct: float = 50.0) -> Figure:
-    """
-    Indicadores semicirculares (half-donut) para nota predicha y riesgo.
-    Mucho más visual que las barras horizontales anteriores.
-    """
+    """Plot semicircular gauges for the predicted grade and risk."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
     fig.patch.set_facecolor(COLORS["bg"])
     for ax in (ax1, ax2):
@@ -409,10 +397,7 @@ def chart_prediction_gauge(prediction: Dict, metrics: Dict,
 def chart_student_activity_heatmap_week(
     timestamps: List[int], figsize=(5, 3.5)
 ) -> Figure:
-    """
-    Mapa de calor día de semana × hora del día.
-    Usa seaborn.heatmap si disponible.
-    """
+    """Plot an activity heat map by weekday and hour, using seaborn when available."""
     DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
     matrix = np.zeros((7, 24), dtype=int)
 
@@ -467,7 +452,7 @@ def chart_student_activity_heatmap_week(
         cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
         plt.setp(cbar.ax.yaxis.get_ticklabels(), color=COLORS["text"], fontsize=7)
 
-    # Anotar el pico de actividad
+    # Annotate peak activity
     max_idx = np.unravel_index(matrix.argmax(), matrix.shape)
     DAYS_FULL = ["Lunes", "Martes", "Miércoles", "Jueves",
                  "Viernes", "Sábado", "Domingo"]
@@ -489,9 +474,7 @@ def chart_student_weekly_activity(
     weeks_active: Optional[int] = None,
     figsize=(5, 3.5),
 ) -> Figure:
-    """
-    Histograma de actividad semanal con caja de estadísticas de sesiones.
-    """
+    """Plot weekly activity with a session-statistics summary."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -557,7 +540,7 @@ def chart_student_weekly_activity(
     ax.set_title("Actividad Semanal", fontsize=11, fontweight="bold",
                  color=COLORS["text"])
 
-    # Caja de estadísticas de sesiones
+    # Session statistics box.
     info_parts: List[str] = []
     if session_count is not None:
         info_parts.append(f"Sesiones: {session_count}")
@@ -584,9 +567,7 @@ def chart_student_weekly_activity(
 def chart_submission_advance_bars(
     submissions: List[Dict], assignments: List[Dict], figsize=(5, 4)
 ) -> Figure:
-    """
-    Barras horizontales: verde=entregó antes del plazo, rojo=tarde/no entregó.
-    """
+    """Plot assignment lead time with on-time and late status colors."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -662,17 +643,13 @@ def chart_submission_advance_bars(
 
 def chart_student_percentile(student: Dict, all_students: List[Dict],
                               figsize=(7, 4.5)) -> Figure:
-    """
-    Barras horizontales que muestran en qué percentil se encuentra el alumno
-    para cada métrica clave en comparación con el resto de la clase.
-    Verde = top, naranja = medio, rojo = bajo.
-    """
+    """Plot the student's percentile for each key metric against the class."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
     m = student.get("metrics", {})
 
-    # (etiqueta, clave_métrica, mayor=mejor)
+    # Label, metric key, and whether higher values are better.
     has_completion = any((s.get("metrics", {}).get("total_activities") or 0) > 0 for s in all_students)
     has_assignments = any((s.get("metrics", {}).get("total_assignments") or 0) > 0 for s in all_students)
     has_quizzes = any((s.get("metrics", {}).get("total_quizzes") or 0) > 0 for s in all_students)
@@ -728,14 +705,14 @@ def chart_student_percentile(student: Dict, all_students: List[Dict],
     bars = ax.barh(y, percentiles, color=colors_list, height=0.55,
                    alpha=0.85, edgecolor="none", zorder=2)
 
-    # Etiqueta numérica en cada barra
+    # Numeric label on each bar.
     for bar, pct in zip(bars, percentiles):
         x_lbl = min(pct + 2, 92)
         ax.text(x_lbl, bar.get_y() + bar.get_height() / 2,
                 f"{pct:.0f}° pct.", va="center",
                 color=COLORS["text"], fontsize=8.5)
 
-    # Línea mediana + zona neutra
+    # Median line and neutral region.
     ax.axvline(50, color=COLORS["fg_dim"], linewidth=1.2,
                linestyle="--", alpha=0.6, label="Mediana (50°)")
     ax.fill_betweenx([-0.5, len(labels) - 0.5], 35, 65,

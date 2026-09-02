@@ -1,7 +1,4 @@
-"""
-Recolector de datos de Moodle.
-Obtiene y estructura todos los datos de un curso para su análisis.
-"""
+"""Collect and structure Moodle course data for analysis."""
 import time
 from datetime import datetime
 from typing import Dict, List, Optional, Callable, Any
@@ -9,17 +6,14 @@ from .moodle_client import MoodleClient
 
 
 class DataCollector:
-    """
-    Orquesta la recolección de todos los datos de un curso desde Moodle.
-    Reporta progreso mediante callbacks para actualizar la UI.
-    """
+    """Collect course data from Moodle and report progress through UI callbacks."""
 
     def __init__(self, client: MoodleClient):
         self.client = client
         self._progress_callback: Optional[Callable[[str, int], None]] = None
 
     def set_progress_callback(self, callback: Callable[[str, int], None]):
-        """Registra callback para reportar progreso: callback(mensaje, porcentaje)."""
+        """Register a progress callback receiving a message and percentage."""
         self._progress_callback = callback
 
     def _progress(self, msg: str, pct: int):
@@ -27,14 +21,11 @@ class DataCollector:
             self._progress_callback(msg, pct)
 
     # ------------------------------------------------------------------
-    # Recolección principal
+    # Main collection flow
     # ------------------------------------------------------------------
 
     def collect_course_data(self, course_id: int, course_info: Optional[Dict] = None) -> Dict:
-        """
-        Recolecta todos los datos del curso y los devuelve como dict estructurado.
-        Este método puede tardar varios segundos dependiendo del tamaño del curso.
-        """
+        """Collect all course data and return a structured dictionary."""
         data: Dict[str, Any] = {
             "course": {},
             "students": [],
@@ -46,31 +37,31 @@ class DataCollector:
             "collected_at": datetime.now().isoformat(),
         }
 
-        # 1. Información del curso
+        # 1. Course information
         self._progress("Obteniendo información del curso...", 5)
         if course_info is None:
             courses = self.client.get_courses()
             course_info = next((c for c in courses if c["id"] == course_id), {"id": course_id})
         data["course"] = dict(course_info)
 
-        # 2. Estructura del curso (secciones/actividades)
+        # 2. Course structure (sections and activities)
         self._progress("Obteniendo estructura del curso...", 10)
         data["contents"] = self.client.get_course_contents(course_id)
 
-        # 3. Tareas
+        # 3. Assignments
         self._progress("Obteniendo tareas...", 15)
         assignments = self.client.get_assignments(course_id)
         data["assignments"] = assignments
 
-        # 4. Cuestionarios
+        # 4. Quizzes
         self._progress("Obteniendo cuestionarios...", 20)
         data["quizzes"] = self.client.get_quizzes(course_id)
 
-        # 5. Foros
+        # 5. Forums
         self._progress("Obteniendo foros...", 25)
         data["forums"] = self.client.get_forums(course_id)
 
-        # 6. Entregas de tareas
+        # 6. Assignment submissions
         self._progress("Obteniendo entregas de tareas...", 30)
         submissions_by_assign: Dict[int, List[Dict]] = {}
         for assign in assignments:
@@ -79,7 +70,7 @@ class DataCollector:
                 submissions_by_assign[aid] = self.client.get_submissions(aid)
         data["submissions_by_assign"] = submissions_by_assign
 
-        # 7. Intentos de cuestionarios
+        # 7. Quiz attempts
         self._progress("Obteniendo intentos de cuestionarios...", 38)
         attempts_by_quiz: Dict[int, List[Dict]] = {}
         for quiz in data["quizzes"]:
@@ -88,23 +79,23 @@ class DataCollector:
                 attempts_by_quiz[qid] = self.client.get_user_attempts(qid)
         data["attempts_by_quiz"] = attempts_by_quiz
 
-        # 8. Posts de foros
+        # 8. Forum posts
         self._progress("Obteniendo participación en foros...", 45)
         posts_by_user = self._collect_forum_posts(data["forums"])
         data["posts_by_user"] = posts_by_user
 
-        # 9. Usuarios matriculados
+        # 9. Enrolled users
         self._progress("Obteniendo usuarios matriculados...", 50)
         enrolled = self.client.get_enrolled_users(course_id)
         enrolled = self._enrich_users_with_profiles(course_id, enrolled)
-        # Filtrar solo alumnos (role: student / editingteacher / teacher)
+        # Keep students and exclude teaching or administrative roles
         students = [
             u for u in enrolled
             if self._is_student(u)
         ]
         data["students_raw"] = students
 
-        # 10. Logs de actividad (opcionales)
+        # 10. Optional activity logs
         self._progress("Intentando obtener logs de actividad...", 55)
         logs = self.client.get_user_logs(course_id)
         if logs:
@@ -114,7 +105,7 @@ class DataCollector:
             data["logs_available"] = False
             data["logs"] = []
 
-        # 11. Datos por alumno
+        # 11. Per-student data
         total_students = len(students)
         student_data_list = []
         for idx, student in enumerate(students):
@@ -140,7 +131,7 @@ class DataCollector:
         return data
 
     # ------------------------------------------------------------------
-    # Datos por alumno
+    # Per-student data
     # ------------------------------------------------------------------
 
     def _collect_student_data(
@@ -157,24 +148,24 @@ class DataCollector:
     ) -> Dict:
         uid = user.get("id")
 
-        # Calificaciones
+        # Grades
         grade_data = self.client.get_grade_items_for_user(course_id, uid)
         grades = self._parse_grade_items(grade_data)
 
-        # Completitud de actividades
+        # Activity completion
         completion_data = self.client.get_activities_completion(course_id, uid)
         completion = self._parse_completion(completion_data)
 
-        # Entregas por alumno
+        # Student submissions
         student_submissions = self._filter_submissions(submissions_by_assign, uid)
 
-        # Intentos de cuestionario por alumno
+        # Student quiz attempts
         student_attempts = self._filter_attempts(attempts_by_quiz, uid)
 
-        # Posts en foros
+        # Forum posts
         user_posts = posts_by_user.get(uid, [])
 
-        # Logs del alumno (si disponibles)
+        # Student logs when available
         user_logs = [l for l in logs if l.get("userid") == uid]
 
         return {
@@ -186,7 +177,7 @@ class DataCollector:
             "enrolled": user.get("lastcourseaccess", 0),
             "country": user.get("country", ""),
             "profileimageurl": user.get("profileimageurl", ""),
-            # Datos recogidos
+            # Collected data
             "grades": grades,
             "completion": completion,
             "submissions": student_submissions,
@@ -196,11 +187,11 @@ class DataCollector:
         }
 
     # ------------------------------------------------------------------
-    # Parsers de respuestas API
+    # API response parsers
     # ------------------------------------------------------------------
 
     def _parse_grade_items(self, data: Dict) -> Dict:
-        """Extrae información de calificaciones de la respuesta de gradereport_user."""
+        """Extract grade information from a gradereport_user response."""
         if not data or not isinstance(data, dict):
             return {"items": [], "final_grade": None, "final_grade_pct": None}
 
@@ -215,7 +206,7 @@ class DataCollector:
             grade_items_raw = grade_report.get("gradeitems", [])
             for item in grade_items_raw:
                 item_type = item.get("itemtype", "")
-                # El item de tipo "course" es la nota total del curso
+                # A course item represents the course total grade
                 if item_type == "course":
                     raw = item.get("graderaw")
                     max_grade = item.get("grademax", 10)
@@ -260,7 +251,7 @@ class DataCollector:
         }
 
     def _parse_completion(self, data: Dict) -> Dict:
-        """Extrae estado de completitud de actividades."""
+        """Extract activity completion status."""
         if not data or not isinstance(data, dict):
             return {"statuses": [], "completed": 0, "total": 0}
 
@@ -273,7 +264,7 @@ class DataCollector:
         }
 
     def _filter_submissions(self, submissions_by_assign: Dict, user_id: int) -> List[Dict]:
-        """Filtra entregas de un alumno concreto."""
+        """Filter submissions for one student."""
         result = []
         for assign_id, subs in submissions_by_assign.items():
             for sub in subs:
@@ -282,7 +273,7 @@ class DataCollector:
         return result
 
     def _filter_attempts(self, attempts_by_quiz: Dict, user_id: int) -> List[Dict]:
-        """Filtra intentos de cuestionario de un alumno concreto."""
+        """Filter quiz attempts for one student."""
         result = []
         for quiz_id, attempts in attempts_by_quiz.items():
             for att in attempts:
@@ -291,7 +282,7 @@ class DataCollector:
         return result
 
     def _collect_forum_posts(self, forums: List[Dict]) -> Dict[int, List[Dict]]:
-        """Recopila posts de foros, indexados por user_id."""
+        """Collect forum posts indexed by user ID."""
         posts_by_user: Dict[int, List[Dict]] = {}
         per_page = 100
         for forum in forums:
@@ -326,7 +317,7 @@ class DataCollector:
         return posts_by_user
 
     def _enrich_users_with_profiles(self, course_id: int, users: List[Dict]) -> List[Dict]:
-        """Completa roles y otros metadatos cuando la matrícula no los incluye."""
+        """Complete roles and metadata when enrollment data omits them."""
         missing_ids = [u.get("id") for u in users if u.get("id") and not u.get("roles")]
         if not missing_ids:
             return users
@@ -363,7 +354,7 @@ class DataCollector:
 
     @staticmethod
     def _is_student(user: Dict) -> bool:
-        """Determina si un usuario matriculado es alumno (no profesor/admin)."""
+        """Return whether an enrolled user is a student rather than staff."""
         roles = user.get("roles", [])
         if not roles:
             return False
@@ -376,7 +367,7 @@ class DataCollector:
 
     @staticmethod
     def count_activities_in_contents(contents: List[Dict]) -> Dict[str, int]:
-        """Cuenta el número total de cada tipo de actividad en el curso."""
+        """Count each activity type in the course."""
         counts: Dict[str, int] = {}
         for section in contents:
             for module in section.get("modules", []):
@@ -386,7 +377,7 @@ class DataCollector:
 
     @staticmethod
     def get_activity_timestamps(contents: List[Dict]) -> List[Dict]:
-        """Extrae la lista de módulos con sus timestamps para línea de tiempo."""
+        """Extract modules and their timestamps for the activity timeline."""
         modules = []
         for section in contents:
             for mod in section.get("modules", []):

@@ -1,6 +1,4 @@
-"""
-Vista previa visual de informes Markdown en formato de ficha ejecutiva.
-"""
+"""Render Markdown reports as an executive-summary preview."""
 import customtkinter as ctk
 
 from .report_formatting import parse_markdown, semantic_section_key, strip_inline_markdown

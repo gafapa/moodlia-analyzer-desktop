@@ -93,7 +93,7 @@ class ChartFrame(ctk.CTkFrame):
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent, fg_color=C["bg_card"], corner_radius=8, **kwargs)
-        # IMPORTANTE: no usar "_canvas" — es un atributo interno de CTkFrame
+        # Do not use "_canvas" because it is an internal CTkFrame attribute.
         self._mpl_canvas = None
         self._mpl_toolbar = None
 

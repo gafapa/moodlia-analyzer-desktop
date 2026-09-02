@@ -1,14 +1,11 @@
-"""
-MoodlIA Analyzer Desktop
-Punto de entrada principal de la aplicación.
-"""
+"""Main entry point for MoodlIA Analyzer Desktop."""
 import sys
 import customtkinter as ctk
 from tkinter import messagebox
 
 from src import i18n
 
-# Las opciones de tema DEBEN configurarse antes de crear ctk.CTk()
+# Theme options must be configured before creating the CTk root.
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 i18n.install_runtime_translations()
@@ -19,10 +16,10 @@ def main():
 
     def _on_close():
         import os
-        # Omitir root.destroy(): destruir el intérprete Tk antes de que el GC
-        # haya terminado hace que Image.__del__ / Variable.__del__ intenten
-        # llamar a Tcl ya muerto → "main thread is not in main loop".
-        # os._exit(0) termina el proceso de inmediato sin ejecutar __del__.
+        # Skip root.destroy(): destroying the Tk interpreter before garbage collection
+        # can leave Image.__del__ or Variable.__del__ calling a dead Tcl interpreter,
+        # which raises "main thread is not in main loop".
+        # os._exit(0) terminates the process immediately without running __del__.
         os._exit(0)
 
     root.protocol("WM_DELETE_WINDOW", _on_close)

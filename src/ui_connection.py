@@ -260,7 +260,7 @@ class AISettingsDialog(ctk.CTkToplevel):
 
 
 # ============================================================
-# Panel de conexión
+# Connection panel
 # ============================================================
 
 class ConnectionPanel(ctk.CTkFrame):

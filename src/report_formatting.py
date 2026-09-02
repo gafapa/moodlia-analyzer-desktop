@@ -1,6 +1,4 @@
-"""
-Formateo ligero de Markdown para preview en Tk y exportación a PDF.
-"""
+"""Lightweight Markdown formatting for Tk previews and PDF exports."""
 import re
 from dataclasses import dataclass
 from typing import List, Sequence, Tuple

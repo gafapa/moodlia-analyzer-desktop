@@ -19,7 +19,7 @@ T = i18n.translate_text
 
 
 # ============================================================
-# Aplicación principal
+# Main application
 # ============================================================
 
 class MoodleAnalyzerApp:
@@ -86,17 +86,17 @@ class MoodleAnalyzerApp:
         new_panel.pack(fill="both", expand=True)
         self._current_panel = new_panel
 
-    # ── Navegación principal ─────────────────────────────────────────
+    # Main navigation
 
     def _show_connect(self):
-        """Paso 1: pantalla de conexión a Moodle."""
+        """Show the Moodle connection screen."""
         self._current_view = "connect"
         self._swap_panel(ConnectionPanel(self._main, self._on_connected, self._on_language_changed))
         self._selected_student = None
         self._set_status("Conecta a un servidor Moodle para continuar")
 
     def _on_connected(self, client: MoodleClient):
-        """Paso 2: cliente listo → selección de curso."""
+        """Open course selection after the client is ready."""
         self._client = client
         self._set_status(
             f"Conectado: {client.site_name}  |  {client.user_fullname}", C["low"])

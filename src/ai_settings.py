@@ -1,7 +1,4 @@
-"""
-Persistencia de configuración de IA local.
-Se guarda en ~/.moodle_analyzer/ai_settings.json
-"""
+"""Persist local AI settings in ~/.moodle_analyzer/ai_settings.json."""
 import json
 import os
 from typing import Dict
@@ -19,6 +16,10 @@ DEFAULT_SETTINGS = {
 
 def _ensure_dir():
     os.makedirs(SETTINGS_DIR, exist_ok=True)
+    try:
+        os.chmod(SETTINGS_DIR, 0o700)
+    except OSError:
+        pass
 
 
 def load_ai_settings() -> Dict:
@@ -41,3 +42,7 @@ def save_ai_settings(settings: Dict):
     payload.update(settings or {})
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+    try:
+        os.chmod(SETTINGS_FILE, 0o600)
+    except OSError:
+        pass

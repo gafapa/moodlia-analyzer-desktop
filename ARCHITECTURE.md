@@ -6,7 +6,13 @@
 
 ## Core Modules
 
-- `src/ui.py`: application UI, connection workflow, course selection, dashboards, and report actions.
+- `src/ui_app.py`: application shell and top-level navigation.
+- `src/ui_connection.py`: connection, profile, and token-generation workflow.
+- `src/ui_dashboard.py`: course selection and course dashboard UI.
+- `src/ui_student.py`: student detail UI.
+- `src/charts_course.py`: course-level and cross-course visualizations.
+- `src/charts_student.py`: student-level visualizations.
+- `src/ui.py`: backward-compatible import shim for `MoodleAnalyzerApp`.
 - `src/moodle_client.py`: Moodle REST client, token-based access, and token generation from credentials.
 - `src/data_collector.py`: gathers course, user, submission, forum, quiz, and completion data from Moodle.
 - `src/analyzer.py`: computes course and student metrics, passing-threshold-aware predictions, and risk indicators.
@@ -28,6 +34,8 @@
    - `service=moodle_mobile_app`
 4. The returned token is reused for the active session and can be stored in the local profile.
 5. Passwords are cleared after successful token generation or connection.
+6. Remote service URLs must use HTTPS; loopback HTTP is allowed only for local development.
+7. Credential-bearing requests reject HTTP redirects.
 
 ## Session Flow
 
@@ -43,6 +51,7 @@
 - Profiles are stored in `~/.moodle_analyzer/profiles.json`.
 - AI settings are stored in `~/.moodle_analyzer/ai_settings.json`.
 - UI language settings are stored in `~/.moodle_analyzer/ui_settings.json`.
+- Profile and settings files are restricted to the current user on platforms that support POSIX file permissions.
 
 ## Web Distribution
 
@@ -54,6 +63,7 @@
 - The desktop app supports Spanish, Galician, English, French, German, Catalan, and Basque.
 - The static website uses client-side translations for the same languages.
 - Report prompts adapt the requested report language to the active UI language.
+- AI report payloads use internal identifiers and aggregate metrics instead of student names or email addresses.
 - UI and website strings are stored as UTF-8 source text in `src/i18n.py` and `website/app.js` to avoid encoding artifacts in labels and messages.
 - The desktop translation runtime resolves icon-prefixed labels and dynamic status lines used in loading states, charts, and reports.
 - Student detail sections, including alert/recommendation panels and AI-report controls, use the same runtime translation layer instead of local hardcoded labels.

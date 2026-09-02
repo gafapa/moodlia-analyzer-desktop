@@ -17,11 +17,11 @@ from .charts_base import COLORS, RISK_PALETTE, _apply_dark_style, _kde_line, _dr
 
 
 # ============================================================
-# Gráficas de Dashboard de curso
+# Course dashboard charts
 # ============================================================
 
 def chart_risk_donut(course_metrics: Dict, figsize=(4, 4)) -> Figure:
-    """Gráfica de donut con distribución de niveles de riesgo."""
+    """Render a donut chart showing the risk-level distribution."""
     high   = course_metrics.get("at_risk_high",   0)
     medium = course_metrics.get("at_risk_medium",  0)
     low    = course_metrics.get("at_risk_low",     0)
@@ -81,10 +81,7 @@ def chart_risk_donut(course_metrics: Dict, figsize=(4, 4)) -> Figure:
 
 
 def chart_engagement_histogram(all_students: List[Dict], figsize=(5, 3.5)) -> Figure:
-    """
-    Histograma de distribución del engagement con curva KDE suave.
-    Barras coloreadas por nivel de riesgo (rojo/naranja/verde).
-    """
+    """Plot engagement distribution with a smooth KDE curve and risk colors."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -102,7 +99,7 @@ def chart_engagement_histogram(all_students: List[Dict], figsize=(5, 3.5)) -> Fi
         values, bins=bins,
         edgecolor=COLORS["bg"], linewidth=0.6, alpha=0.85, zorder=2,
     )
-    # Colorear por riesgo
+    # Color by risk level
     for patch, left in zip(patches, bins_out[:-1]):
         if left < 30:
             patch.set_facecolor(COLORS["alto"])
@@ -119,7 +116,7 @@ def chart_engagement_histogram(all_students: List[Dict], figsize=(5, 3.5)) -> Fi
                     alpha=0.75, zorder=5, label="Densidad")
             ax.fill_between(x_k, y_k, alpha=0.08, color=COLORS["text"], zorder=4)
 
-    # Línea de media
+    # Mean reference line.
     mean_val = float(np.mean(values))
     ax.axvline(mean_val, color=COLORS["accent"], linestyle="--", linewidth=1.8,
                label=f"Media: {mean_val:.0f}", zorder=6)
@@ -137,7 +134,7 @@ def chart_engagement_histogram(all_students: List[Dict], figsize=(5, 3.5)) -> Fi
 
 def chart_grade_distribution(course_metrics: Dict, figsize=(5, 3.5),
                               pass_threshold_pct: float = 50.0) -> Figure:
-    """Barras con distribución de calificaciones, etiquetas flotantes."""
+    """Plot grade distribution bars with floating labels."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -152,7 +149,7 @@ def chart_grade_distribution(course_metrics: Dict, figsize=(5, 3.5),
                      color=COLORS["text"])
         return fig
 
-    # Colores dinámicos según el umbral real de aprobado
+    # Dynamic colors based on the active passing threshold
     _range_bounds = [(0, 19), (20, 39), (40, 59), (60, 79), (80, 100)]
     bar_colors = []
     for lo, hi in _range_bounds:
@@ -166,7 +163,7 @@ def chart_grade_distribution(course_metrics: Dict, figsize=(5, 3.5),
                   edgecolor=COLORS["bg"], linewidth=0.6, alpha=0.88,
                   width=0.65, zorder=2)
 
-    # Etiquetas sobre las barras
+    # Labels above the bars
     for bar, val in zip(bars, values):
         if val > 0:
             ax.text(
@@ -188,11 +185,7 @@ def chart_grade_distribution(course_metrics: Dict, figsize=(5, 3.5),
 
 def chart_scatter_engagement_vs_grade(all_students: List[Dict],
                                        figsize=(5, 4)) -> Figure:
-    """
-    Scatter engagement vs calificación.
-    Usa seaborn.scatterplot si disponible (mejora los markers).
-    Añade banda de confianza sombreada alrededor de la tendencia.
-    """
+    """Plot engagement against grades with a trend confidence band."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -216,13 +209,13 @@ def chart_scatter_engagement_vs_grade(all_students: List[Dict],
                      color=COLORS["text"])
         return fig
 
-    # Puntos coloreados por riesgo
+    # Color points by risk level
     for eng, grade, risk in zip(xs, ys, risk_levels):
         color = COLORS.get(risk, COLORS["neutral"])
         ax.scatter(eng, grade, c=color, alpha=0.82, s=70,
                    edgecolors=COLORS["bg"], linewidths=0.6, zorder=3)
 
-    # Línea de tendencia + banda de confianza sombreada
+    # Trend line with a shaded confidence band.
     if len(xs) >= 4:
         xs_arr = np.array(xs)
         ys_arr = np.array(ys)
@@ -230,7 +223,7 @@ def chart_scatter_engagement_vs_grade(all_students: List[Dict],
         p = np.poly1d(z)
         x_line = np.linspace(min(xs_arr), max(xs_arr), 200)
         y_line = p(x_line)
-        # Residuals std para banda
+    # Residual standard deviation for the band
         residuals = ys_arr - p(xs_arr)
         std = float(np.std(residuals))
         ax.plot(x_line, y_line, color=COLORS["primary"],
@@ -261,10 +254,7 @@ def chart_scatter_engagement_vs_grade(all_students: List[Dict],
 
 
 def chart_activity_heatmap(all_students: List[Dict], figsize=(6, 4)) -> Figure:
-    """
-    Heatmap de actividad: alumnos × métricas.
-    Usa seaborn.heatmap si disponible (cell lines, colorbars bonitas).
-    """
+    """Plot a student-by-metric activity heat map, using seaborn when available."""
     has_completion = any((s.get("metrics", {}).get("total_activities") or 0) > 0 for s in all_students)
     has_assignments = any((s.get("metrics", {}).get("total_assignments") or 0) > 0 for s in all_students)
     has_quizzes = any((s.get("metrics", {}).get("total_quizzes") or 0) > 0 for s in all_students)
@@ -353,7 +343,7 @@ def chart_activity_heatmap(all_students: List[Dict], figsize=(6, 4)) -> Figure:
 
 def chart_top_risk_bar(all_students: List[Dict], top_n: int = 10,
                         figsize=(5, 4)) -> Figure:
-    """Barras horizontales de los alumnos con mayor riesgo."""
+    """Render horizontal bars for the students at highest risk."""
     high_risk   = [s for s in all_students if s.get("risk_level") == "alto"]
     medium_risk = [s for s in all_students if s.get("risk_level") == "medio"]
     target = (high_risk + medium_risk)[:top_n]
@@ -385,7 +375,7 @@ def chart_top_risk_bar(all_students: List[Dict], top_n: int = 10,
     ax.set_xlabel("Índice de Engagement")
     ax.set_title(f"Alumnos en Mayor Riesgo (Top {len(target)})",
                  fontsize=11, fontweight="bold", color=COLORS["text"])
-    # Línea de referencia
+    # Reference line.
     ax.axvline(30, color=COLORS["alto"], linestyle=":", linewidth=1, alpha=0.5)
     ax.axvline(60, color=COLORS["bajo"], linestyle=":", linewidth=1, alpha=0.5)
     fig.tight_layout()
@@ -393,10 +383,7 @@ def chart_top_risk_bar(all_students: List[Dict], top_n: int = 10,
 
 
 def chart_correlation_matrix(all_students: List[Dict], figsize=(5, 4)) -> Figure:
-    """
-    Matriz de correlación entre métricas.
-    Usa seaborn.heatmap si disponible (mucho más bonita con anotaciones).
-    """
+    """Plot a correlation matrix for student metrics, using seaborn when available."""
     has_completion = any((s.get("metrics", {}).get("total_activities") or 0) > 0 for s in all_students)
     has_assignments = any((s.get("metrics", {}).get("total_assignments") or 0) > 0 for s in all_students)
     has_quizzes = any((s.get("metrics", {}).get("total_quizzes") or 0) > 0 for s in all_students)
@@ -435,8 +422,7 @@ def chart_correlation_matrix(all_students: List[Dict], figsize=(5, 4)) -> Figure
     min_len     = min(len(c) for c in data_cols)
     matrix_data = np.array([c[:min_len] for c in data_cols], dtype=float)
 
-    # Descartar columnas con desviación estándar = 0 (valores constantes)
-    # para evitar división por cero en np.corrcoef
+    # Drop constant columns to avoid division by zero in np.corrcoef
     stds        = matrix_data.std(axis=1)
     valid_mask  = stds > 1e-9
     if valid_mask.sum() < 2:
@@ -451,7 +437,7 @@ def chart_correlation_matrix(all_students: List[Dict], figsize=(5, 4)) -> Figure
     labels      = [lbl for lbl, ok in zip(labels, valid_mask) if ok]
 
     corr_matrix = np.corrcoef(matrix_data)
-    # Reemplazar NaN residuales (si los hubiera) por 0
+    # Replace any remaining NaN values with zero
     corr_matrix = np.nan_to_num(corr_matrix, nan=0.0)
 
     if _HAS_SEABORN:
@@ -476,7 +462,7 @@ def chart_correlation_matrix(all_students: List[Dict], figsize=(5, 4)) -> Figure
         ax.set_yticklabels(ax.get_yticklabels(), color=COLORS["text"],
                            fontsize=8, rotation=0)
         _style_seaborn_colorbar(ax)
-        # Anotaciones manuales con color según contraste
+    # Manual annotations with contrast-aware colors
         for i in range(len(labels)):
             for j in range(len(labels)):
                 val = corr_matrix[i, j]
@@ -509,15 +495,11 @@ def chart_correlation_matrix(all_students: List[Dict], figsize=(5, 4)) -> Figure
 
 
 # ============================================================
-# Nuevas gráficas de análisis de curso
+# Additional course analysis charts
 # ============================================================
 
 def chart_course_funnel(all_students: List[Dict], figsize=(7, 4)) -> Figure:
-    """
-    Funnel horizontal de progresión del curso.
-    Muestra cuántos alumnos superan cada etapa: matrícula → acceso
-    → primera entrega → completitud >50% → sin riesgo alto.
-    """
+    """Plot enrollment, access, submission, completion, and risk as a course funnel."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -573,7 +555,7 @@ def chart_course_funnel(all_students: List[Dict], figsize=(7, 4)) -> Figure:
             va="center", color=COLORS["text"], fontsize=9, fontweight="bold",
         )
 
-    # Caída entre etapas
+    # Drop-off between stages
     for i in range(1, len(values)):
         drop = values[i - 1] - values[i]
         if drop > 0:
@@ -598,11 +580,7 @@ def chart_course_funnel(all_students: List[Dict], figsize=(7, 4)) -> Figure:
 
 def chart_submissions_heatmap(all_students: List[Dict], assignments: List[Dict],
                                figsize=(10, 6)) -> Figure:
-    """
-    Heatmap alumnos × tareas.
-    Verde=a tiempo  |  Naranja=tarde/borrador  |  Rojo=sin entregar  |  Gris=pendiente.
-    Alumnos ordenados por engagement (mejor arriba). Tareas por fecha límite.
-    """
+    """Plot student-by-assignment submission status ordered by engagement and due date."""
     from matplotlib.colors import LinearSegmentedColormap
 
     if not all_students or not assignments:
@@ -710,10 +688,7 @@ def chart_submissions_heatmap(all_students: List[Dict], assignments: List[Dict],
 
 def chart_top_bottom_comparison(all_students: List[Dict],
                                  figsize=(8, 4.5)) -> Figure:
-    """
-    Comparación Top 25% vs Bottom 25% por nota académica.
-    5 métricas clave para identificar qué diferencia a los mejores alumnos.
-    """
+    """Compare five key metrics for the top and bottom academic quartiles."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -789,10 +764,7 @@ def chart_top_bottom_comparison(all_students: List[Dict],
 
 def chart_quiz_difficulty(all_students: List[Dict], quizzes: List[Dict],
                            figsize=(8, 4.5), pass_threshold_pct: float = 50.0) -> Figure:
-    """
-    Análisis de dificultad por cuestionario.
-    Nota media (%) y tasa de aprobados, ordenados del más difícil al más fácil.
-    """
+    """Plot average score and pass rate by quiz, from hardest to easiest."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -874,10 +846,7 @@ def chart_quiz_difficulty(all_students: List[Dict], quizzes: List[Dict],
 
 def chart_forum_activity(all_students: List[Dict], forums: List[Dict],
                           figsize=(7, 4)) -> Figure:
-    """
-    Participación en foros: stacked bar (sin participar / baja / activa)
-    por foro, con total de posts anotado arriba.
-    """
+    """Plot inactive, low, and active participation per forum with post totals."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -972,18 +941,15 @@ def chart_forum_activity(all_students: List[Dict], forums: List[Dict],
 
 
 # ============================================================
-# Gráficas comparativas de todos los cursos
+# Cross-course comparison charts
 # ============================================================
 
 def chart_all_courses_enrollment(courses: List[Dict], figsize=(9, 5)) -> Figure:
-    """
-    Barras horizontales con el nº de alumnos matriculados por curso.
-    Ordenado de mayor a menor. Muestra hasta 25 cursos.
-    """
+    """Plot enrollment for up to 25 courses, ordered from highest to lowest."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
-    # Filtrar cursos con dato de matriculación y ordenar
+    # Filter and sort courses with enrollment data
     valid = [c for c in courses if c.get("enrolledusercount") not in (None, "?", "")]
     if not valid:
         ax.text(0.5, 0.5, "Sin datos de matriculación disponibles",
@@ -1000,7 +966,7 @@ def chart_all_courses_enrollment(courses: List[Dict], figsize=(9, 5)) -> Figure:
     counts = [int(c.get("enrolledusercount", 0)) for c in valid]
     max_c  = max(counts) if counts else 1
 
-    # Colorear por tamaño del curso
+    # Color by course size
     bar_colors = [
         COLORS["bajo"]    if n >= max_c * 0.6 else
         COLORS["primary"] if n >= max_c * 0.25 else
@@ -1037,19 +1003,15 @@ def chart_all_courses_enrollment(courses: List[Dict], figsize=(9, 5)) -> Figure:
 
 
 # ============================================================
-# Nuevas gráficas: Box Plot, Real vs Predicha, Burbujas
+# Additional charts: box plot, actual vs predicted, and bubbles
 # ============================================================
 
 def chart_grade_boxplot(all_students: List[Dict], figsize=(10, 5), pass_threshold_pct: float = 50.0) -> Figure:
-    """
-    Box plot de calificaciones por actividad (tomado de grade_items de cada alumno).
-    Muestra mediana, cuartiles y outliers para detectar tareas fáciles/difíciles.
-    Color del box según mediana: verde ≥70%, naranja ≥50%, rojo <50%.
-    """
+    """Plot per-activity grade distributions, quartiles, medians, and outliers."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
-    # Agregar grade_items de todos los alumnos por nombre de actividad
+    # Aggregate grade items from all students by activity name
     grade_by_act: Dict[str, List[float]] = {}
     for s in all_students:
         for item in s.get("metrics", {}).get("grade_items", []):
@@ -1058,7 +1020,7 @@ def chart_grade_boxplot(all_students: List[Dict], figsize=(10, 5), pass_threshol
             if pct is not None:
                 grade_by_act.setdefault(name, []).append(float(pct))
 
-    # Filtrar ≥3 datos, ordenar por mediana, top 14
+    # Keep groups with at least three values, sort by median, and show the top 14
     valid = {k: v for k, v in grade_by_act.items() if len(v) >= 3}
     if not valid:
         ax.text(0.5, 0.5, "Sin calificaciones registradas en el libro de notas",
@@ -1115,10 +1077,7 @@ def chart_grade_boxplot(all_students: List[Dict], figsize=(10, 5), pass_threshol
 
 
 def chart_predicted_vs_actual(all_students: List[Dict], figsize=(8, 4.5), pass_threshold_pct: float = 50.0) -> Figure:
-    """
-    Histogramas solapados: nota real actual vs nota predicha por el modelo.
-    Permite comparar la distribución real con lo que predice el modelo.
-    """
+    """Compare overlapping distributions of current and predicted grades."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
 
@@ -1154,7 +1113,7 @@ def chart_predicted_vs_actual(all_students: List[Dict], figsize=(8, 4.5), pass_t
         ax.axvline(np.mean(predicted), color=COLORS["accent2"],
                    linewidth=1.5, linestyle="--", alpha=0.8)
 
-    # KDE suavizado encima de cada histograma
+    # Smooth KDE over each histogram.
     if actual and len(actual) > 3:
         xk, yk = _kde_line(actual, 0, 100, bandwidth=10)
         scale = len(actual) * (100 / 11)
@@ -1179,11 +1138,7 @@ def chart_predicted_vs_actual(all_students: List[Dict], figsize=(8, 4.5), pass_t
 
 
 def chart_risk_bubble(all_students: List[Dict], figsize=(8, 5), pass_threshold_pct: float = 50.0) -> Figure:
-    """
-    Scatter avanzado — Engagement × Nota actual.
-    Tamaño de la burbuja ∝ probabilidad de suspenso.
-    Color según nivel de riesgo. Cuadrantes con zona de actuación.
-    """
+    """Plot engagement against grades with risk probability encoded as bubble size."""
     from matplotlib.lines import Line2D
 
     fig, ax = plt.subplots(figsize=figsize)
@@ -1220,21 +1175,21 @@ def chart_risk_bubble(all_students: List[Dict], figsize=(8, 5), pass_threshold_p
         fig.tight_layout()
         return fig
 
-    # Líneas de referencia
+    # Reference lines.
     ax.axhline(pass_threshold_pct, color=COLORS["alto"],    linewidth=1.2, linestyle="--", alpha=0.5)
     ax.axvline(40, color=COLORS["neutral"], linewidth=1.0, linestyle="--", alpha=0.4)
 
-    # Sombreado de la zona crítica
+    # Shade the critical zone
     ax.fill_between([0, 40], 0, pass_threshold_pct, color=COLORS["alto"], alpha=0.06)
 
-    # Etiquetas de cuadrante
+    # Quadrant labels.
     fs = 7.5
     ax.text(2,  97, "Bajo eng. / Alta nota",     color=COLORS["fg_dim"], fontsize=fs)
     ax.text(42, 97, "✓ Engagement + nota alta",  color=COLORS["bajo"],   fontsize=fs)
     ax.text(2,   3, "⚠ ZONA CRÍTICA",            color=COLORS["alto"],   fontsize=fs, fontweight="bold")
     ax.text(42,  3, "Eng. ok · nota baja",        color=COLORS["medio"],  fontsize=fs)
 
-    # Leyenda de riesgo + nota sobre el tamaño
+    # Risk legend and size note
     legend_elements = [
         Line2D([0], [0], marker="o", color="w", label="Riesgo alto",
                markerfacecolor=COLORS["alto"],  markersize=10),
@@ -1258,10 +1213,7 @@ def chart_risk_bubble(all_students: List[Dict], figsize=(8, 5), pass_threshold_p
 
 
 def chart_all_courses_categories(courses: List[Dict], figsize=(6, 5)) -> Figure:
-    """
-    Donut de distribución de cursos por categoría.
-    Muestra nº de cursos y total de alumnos por categoría.
-    """
+    """Plot course and enrollment distribution by category as a donut chart."""
     fig, ax = plt.subplots(figsize=figsize)
     _apply_dark_style(fig, ax)
     ax.spines["bottom"].set_visible(False)
@@ -1277,7 +1229,7 @@ def chart_all_courses_categories(courses: List[Dict], figsize=(6, 5)) -> Figure:
                      color=COLORS["text"])
         return fig
 
-    # Agrupar por categoría
+    # Group by category
     cat_counts: Dict[str, int] = {}
     cat_students: Dict[str, int] = {}
     for c in courses:
@@ -1287,7 +1239,7 @@ def chart_all_courses_categories(courses: List[Dict], figsize=(6, 5)) -> Figure:
         if enroll not in (None, "?", ""):
             cat_students[cat] = cat_students.get(cat, 0) + int(enroll)
 
-    # Ordenar por nº de cursos, agrupar categorías pequeñas en "Otras"
+    # Sort by course count and group small categories under "Other"
     sorted_cats = sorted(cat_counts.items(), key=lambda x: x[1], reverse=True)
     if len(sorted_cats) > 8:
         top = sorted_cats[:7]
@@ -1301,7 +1253,7 @@ def chart_all_courses_categories(courses: List[Dict], figsize=(6, 5)) -> Figure:
     values = [v for _, v in sorted_cats]
     total  = sum(values)
 
-    # Paleta de colores variada
+    # Varied color palette.
     palette = [
         COLORS["primary"], COLORS["accent"], COLORS["bajo"], COLORS["secondary"],
         COLORS["accent2"], COLORS["medio"], COLORS["alto"], COLORS["neutral"],
@@ -1330,7 +1282,7 @@ def chart_all_courses_categories(courses: List[Dict], figsize=(6, 5)) -> Figure:
     ax.text(0, -0.12, "cursos", ha="center", va="center",
             fontsize=9, color=COLORS["fg_dim"])
 
-    # Leyenda con nº de cursos y alumnos
+    # Legend with course and student counts
     legend_labels = [
         f"{lbl}  ({cnt} cursos" +
         (f" · {cat_students[lbl]} al." if cat_students.get(lbl) else "") + ")"

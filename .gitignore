@@ -15,14 +15,14 @@ dist/
 .coverage
 htmlcov/
 
-# Archivos locales
+# Local files
 .moodle_mcp_url
 .agent
 .claude/
 .codex/
 .metagallego/
 
-# Binarios / ejecutables
+# Binaries and executables
 deploy/webserver/downloads/
 *.exe
 *.app

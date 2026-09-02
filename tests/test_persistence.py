@@ -55,6 +55,16 @@ class PersistenceTests(unittest.TestCase):
                 with open(settings_file, "r", encoding="utf-8") as handle:
                     self.assertEqual(json.load(handle), loaded)
 
+    @unittest.skipIf(os.name == "nt", "Windows does not expose POSIX permission bits reliably")
+    def test_persistent_files_are_private_to_the_current_user(self):
+        with tempfile.TemporaryDirectory() as directory:
+            profile_file = os.path.join(directory, "profiles.json")
+            with patch.object(profiles, "PROFILES_DIR", directory), patch.object(
+                profiles, "PROFILES_FILE", profile_file
+            ):
+                profiles.upsert_profile("Campus", "https://example.test", "token")
+                self.assertEqual(os.stat(profile_file).st_mode & 0o777, 0o600)
+
 
 if __name__ == "__main__":
     unittest.main()

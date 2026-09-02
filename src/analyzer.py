@@ -1,7 +1,4 @@
-"""
-Motor de análisis: métricas, predicciones y recomendaciones.
-Procesa los datos recolectados de Moodle y genera insights accionables.
-"""
+"""Analysis engine for metrics, predictions, and actionable recommendations."""
 import math
 import time
 from datetime import datetime, timedelta
@@ -9,7 +6,7 @@ from typing import Dict, List, Optional, Tuple, Any
 
 from .metrics import StudentMetrics, TREND_IMPROVING, TREND_STABLE, TREND_DECLINING
 
-# ML opcional: usamos scikit-learn si está disponible, si no, fallback heurístico
+# Use scikit-learn when available and fall back to a heuristic otherwise.
 try:
     import numpy as np
     from sklearn.ensemble import GradientBoostingRegressor, RandomForestClassifier
@@ -22,7 +19,7 @@ except ImportError:
 
 
 # ============================================================
-# Constantes
+# Constants
 # ============================================================
 
 RISK_HIGH = "alto"
@@ -39,14 +36,15 @@ DEFAULT_PASS_THRESHOLD_PCT = 50.0
 
 
 # ============================================================
-# Predictor de rendimiento
+# Performance predictor
 # ============================================================
 
 class GradePredictor:
     """
-    Predice la nota final y clasifica el riesgo del alumno.
-    Usa ML con scikit-learn si está disponible y hay suficientes datos,
-    o una fórmula heurística ponderada como fallback.
+    Predict the final grade and classify student risk.
+
+    Use scikit-learn when enough data is available, or a weighted heuristic
+    as a fallback.
     """
 
     def __init__(self, pass_threshold_pct: float = DEFAULT_PASS_THRESHOLD_PCT):
@@ -57,7 +55,7 @@ class GradePredictor:
         self.pass_threshold_pct = float(pass_threshold_pct)
 
     def _extract_features(self, m: Dict) -> List[float]:
-        """Vector de features para el modelo ML."""
+        """Build the feature vector used by the machine-learning model."""
         return [
             m.get("engagement_score", 0),
             m.get("completion_rate", 0),
@@ -70,7 +68,7 @@ class GradePredictor:
         ]
 
     def train(self, all_student_metrics: List[Dict]):
-        """Entrena los modelos con datos de todos los alumnos del curso."""
+        """Train the models with data from every student in the course."""
         if not ML_AVAILABLE:
             return
 
@@ -101,7 +99,7 @@ class GradePredictor:
             self.model_trained = False
 
     def predict(self, metrics: Dict) -> Dict:
-        """Predice nota final y riesgo para un alumno."""
+        """Predict a student's final grade and risk."""
         features = self._extract_features(metrics)
 
         if self.model_trained and ML_AVAILABLE:
@@ -129,13 +127,13 @@ class GradePredictor:
             return self._predict_heuristic(metrics)
 
     def _predict_heuristic(self, metrics: Dict) -> Dict:
-        """Predicción basada en fórmula ponderada cuando no hay ML."""
+        """Use a weighted formula when machine learning is unavailable."""
         eng = metrics.get("engagement_score", 0)
         acad = metrics.get("academic_score", 0)
         sub_rate = metrics.get("submission_rate")
         days = min(metrics.get("days_since_access", 999), 90)
 
-        # Penalización por acceso reciente
+        # Recent-access penalty
         access_penalty = max(0, days - 7) * 0.5
 
         weighted_scores = [(eng, 0.35), (acad, 0.45)]
@@ -147,7 +145,7 @@ class GradePredictor:
         ) - access_penalty
         predicted_pct = max(0, min(100, predicted_pct))
 
-        # Riesgo: aproximación a la probabilidad de quedar por debajo del umbral de aprobado.
+        # Approximate the probability of falling below the passing threshold.
         threshold = max(self.pass_threshold_pct, 1.0)
         risk_prob = max(0, min(1, (threshold - predicted_pct) / threshold)) if predicted_pct < threshold else 0
 
@@ -163,24 +161,21 @@ class GradePredictor:
 
 
 # ============================================================
-# Evaluador de riesgo
+# Risk evaluator
 # ============================================================
 
 class RiskAssessor:
-    """Determina el nivel de riesgo de un alumno y los factores de riesgo."""
+    """Determine a student's risk level and contributing factors."""
 
     def __init__(self, pass_threshold_pct: float = DEFAULT_PASS_THRESHOLD_PCT):
         self.pass_threshold_pct = float(pass_threshold_pct)
 
     def assess(self, metrics: Dict, prediction: Dict) -> Tuple[str, List[str]]:
-        """
-        Devuelve (nivel_riesgo, lista_de_factores).
-        nivel_riesgo: 'alto', 'medio', 'bajo'
-        """
+        """Return the risk level and the list of contributing factors."""
         factors = []
         risk_points = 0
 
-        # Factor: acceso reciente
+        # Factor: recent access
         days = metrics.get("days_since_access", 0)
         if days > 14:
             factors.append(f"Sin acceso desde hace {days} días")
@@ -189,7 +184,7 @@ class RiskAssessor:
             factors.append(f"No ha accedido en {days} días")
             risk_points += 1
 
-        # Factor: tasa de entregas
+        # Factor: submission rate
         sub_rate = metrics.get("submission_rate", 100)
         if metrics.get("total_assignments", 0) > 0 and sub_rate is not None:
             if sub_rate < 50:
@@ -199,7 +194,7 @@ class RiskAssessor:
                 factors.append(f"Tasa de entregas baja: {sub_rate:.0f}%")
                 risk_points += 1
 
-        # Factor: calificación actual
+        # Factor: current grade
         grade_pct = metrics.get("final_grade_pct")
         if grade_pct is not None:
             if grade_pct < self.pass_threshold_pct - 10:
@@ -209,13 +204,13 @@ class RiskAssessor:
                 factors.append(f"Calificación en riesgo de suspenso: {grade_pct:.0f}%")
                 risk_points += 2
 
-        # Factor: tendencia de calificaciones
+        # Factor: grade trend
         trend = metrics.get("grade_trend")
         if trend == TREND_DECLINING:
             factors.append("Tendencia de notas a la baja")
             risk_points += 2
 
-        # Factor: engagement bajo
+        # Factor: low engagement
         eng = metrics.get("engagement_score", 100)
         if eng < 30:
             factors.append(f"Índice de engagement muy bajo: {eng:.0f}/100")
@@ -224,18 +219,18 @@ class RiskAssessor:
             factors.append(f"Engagement por debajo de la media: {eng:.0f}/100")
             risk_points += 1
 
-        # Factor: completitud baja
+        # Factor: low completion
         comp_rate = metrics.get("completion_rate", 100)
         if metrics.get("total_activities", 0) > 0 and comp_rate is not None and comp_rate < 40:
             factors.append(f"Solo ha completado el {comp_rate:.0f}% de las actividades")
             risk_points += 2
 
-        # Factor: sin participación en foros (si hay foros)
+        # Factor: no forum participation when forums are present
         if metrics.get("total_forums", 0) > 0 and metrics.get("forum_posts_count", 0) == 0:
             factors.append("Sin participación en foros")
             risk_points += 1
 
-        # Factor: cobertura de cuestionarios baja (si el curso tiene quizzes)
+        # Factor: low quiz coverage when the course contains quizzes
         quiz_cov = metrics.get("quiz_coverage_rate")
         if metrics.get("total_quizzes", 0) > 0 and quiz_cov is not None:
             if quiz_cov < 30:
@@ -245,15 +240,15 @@ class RiskAssessor:
                 factors.append(f"Cobertura baja de cuestionarios: {quiz_cov:.0f}%")
                 risk_points += 1
 
-        # Factor: probabilidad de riesgo de la predicción
+        # Factor: predicted risk probability
         risk_prob = prediction.get("risk_probability", 0)
         if risk_prob > 0.7:
             risk_points += 2
         elif risk_prob > 0.4:
             risk_points += 1
 
-        # Mitigación en dos niveles: nota actual y prevista claramente por encima del aprobado
-        # reducen el riesgo de forma proporcional para evitar falsos positivos.
+        # Two-stage mitigation when current and predicted grades clearly exceed the threshold
+        # reduce risk proportionally to avoid false positives.
         predicted_grade_pct = prediction.get("predicted_grade_pct")
         if grade_pct is not None and predicted_grade_pct is not None:
             very_safe = (
@@ -270,7 +265,7 @@ class RiskAssessor:
             elif clearly_safe:
                 risk_points = max(0, risk_points - 2)
 
-        # Determinar nivel
+        # Determine the risk level.
         if risk_points >= 6:
             level = RISK_HIGH
         elif risk_points >= 3:
@@ -282,17 +277,17 @@ class RiskAssessor:
 
 
 # ============================================================
-# Generador de recomendaciones
+# Recommendation generator
 # ============================================================
 
 class RecommendationEngine:
-    """Genera recomendaciones personalizadas para alumnos y para el docente."""
+    """Generate tailored recommendations for students and the teacher."""
 
     def __init__(self, pass_threshold_pct: float = DEFAULT_PASS_THRESHOLD_PCT):
         self.pass_threshold_pct = float(pass_threshold_pct)
 
     def for_student(self, metrics: Dict, risk_level: str, risk_factors: List[str]) -> List[str]:
-        """Recomendaciones dirigidas al alumno."""
+        """Generate student-facing recommendations."""
         recs = []
 
         days = metrics.get("days_since_access", 0)
@@ -343,7 +338,7 @@ class RecommendationEngine:
         return recs
 
     def for_teacher(self, all_metrics: List[Dict], course_data: Dict) -> List[str]:
-        """Recomendaciones globales para el docente sobre el curso."""
+        """Generate course-level recommendations for the teacher."""
         recs = []
         total = len(all_metrics)
         if total == 0:
@@ -390,13 +385,15 @@ class RecommendationEngine:
 
 
 # ============================================================
-# Analizador de curso completo
+# Full course analyzer
 # ============================================================
 
 class CourseAnalyzer:
     """
-    Orquesta el análisis completo de un curso.
-    Toma los datos crudos del DataCollector y produce métricas, predicciones y recomendaciones.
+    Orchestrate the complete analysis of a course.
+
+    Convert raw DataCollector output into metrics, predictions, and
+    recommendations.
     """
 
     def __init__(self, pass_threshold_pct: float = DEFAULT_PASS_THRESHOLD_PCT):
@@ -406,22 +403,20 @@ class CourseAnalyzer:
         self.rec_engine = RecommendationEngine(self.pass_threshold_pct)
 
     def analyze(self, course_data: Dict) -> Dict:
-        """
-        Procesa los datos del curso y devuelve el análisis completo.
-        """
+        """Process course data and return the complete analysis."""
         students_raw = course_data.get("students", [])
         result_students = []
         all_metrics = []
 
-        # Paso 1: Calcular métricas individuales
+        # Step 1: Compute individual metrics
         for student in students_raw:
             m = StudentMetrics(student, course_data).compute()
             all_metrics.append({**m, "id": student.get("id"), "fullname": student.get("fullname")})
 
-        # Paso 2: Entrenar predictor con datos de todo el curso
+        # Step 2: Train the predictor with course-wide data
         self.predictor.train(all_metrics)
 
-        # Paso 3: Predicción y riesgo por alumno
+        # Step 3: Predict risk for each student
         teacher_metrics = []
         for student, m in zip(students_raw, all_metrics):
             prediction = self.predictor.predict(m)
@@ -439,10 +434,10 @@ class CourseAnalyzer:
             result_students.append(result)
             teacher_metrics.append({**m, "risk_level": risk_level})
 
-        # Paso 4: Recomendaciones para el docente
+        # Step 4: Generate teacher recommendations
         teacher_recs = self.rec_engine.for_teacher(teacher_metrics, course_data)
 
-        # Paso 5: Métricas globales del curso
+        # Step 5: Compute course-wide metrics
         course_metrics = self._compute_course_metrics(teacher_metrics)
 
         return {
@@ -499,7 +494,7 @@ class CourseAnalyzer:
         }
 
     def _grade_distribution(self, grades: List[float]) -> Dict[str, int]:
-        """Distribución de calificaciones en rangos."""
+        """Group grades into percentage ranges."""
         dist = {"0-19": 0, "20-39": 0, "40-59": 0, "60-79": 0, "80-100": 0}
         for g in grades:
             if g < 20:

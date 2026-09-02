@@ -1,6 +1,4 @@
-"""
-Exportación de informes Markdown a PDF sin dependencias externas.
-"""
+"""Export Markdown reports to PDF without external runtime dependencies."""
 from textwrap import wrap
 from typing import List, Tuple
 

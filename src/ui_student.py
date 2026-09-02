@@ -18,7 +18,7 @@ T = i18n.translate_text
 
 
 # ============================================================
-# Panel de detalle de alumno
+# Student detail panel
 # ============================================================
 
 POSITIVE_RECOMMENDATION = "¡Vas por buen camino! Mantén el ritmo de participación."
@@ -76,7 +76,7 @@ class StudentDetailPanel(ctk.CTkFrame):
         grade_pct = m.get("final_grade_pct")
         pred_pct = self._prediction.get("predicted_grade_pct", 0)
 
-        # --- Fila 1: métricas principales ---
+        # First row: primary metrics.
         adv = m.get("submission_avg_advance_days")
         adv_str = (f"+{adv:.1f}d" if adv and adv >= 0
                    else (f"{adv:.1f}d" if adv is not None else "N/D"))
@@ -115,7 +115,7 @@ class StudentDetailPanel(ctk.CTkFrame):
             card.grid(row=0, column=i, padx=4, sticky="nsew")
             kpi_row.columnconfigure(i, weight=1)
 
-        # --- Fila 2: métricas de sesiones y patrones ---
+        # Second row: session and pattern metrics.
         kpi_row2 = ctk.CTkFrame(self, fg_color=C["bg"], corner_radius=0)
         kpi_row2.pack(fill="x", padx=14, pady=(0, 6))
         kpi_data2 = [
@@ -211,7 +211,7 @@ class StudentDetailPanel(ctk.CTkFrame):
         left = ChartFrame(paned)
         left.pack(side="left", fill="both", expand=True, padx=(8, 4), pady=8)
 
-        # Calcular media del curso para superponer en el radar chart
+        # Compute the course average for the radar-chart overlay
         _all = self._analysis.get("students", [])
         _radar_keys = ["engagement_score", "completion_rate", "submission_rate",
                        "on_time_rate", "quiz_avg_pct", "academic_score"]
@@ -305,12 +305,7 @@ class StudentDetailPanel(ctk.CTkFrame):
             self._metrics.get("activity_timestamps", []), figsize=(5, 4.5)))
 
     def _build_tab_sessions(self, parent):
-        """
-        Tab 'Sesiones':
-        - Izquierda: histograma de actividad semanal + estadísticas de sesiones
-          (si los logs de Moodle están disponibles) o datos desde otros eventos.
-        - Derecha: antelación / retraso por tarea (barras).
-        """
+        """Build session activity and assignment lead-time visualizations."""
         paned = ctk.CTkFrame(parent, fg_color=C["bg"], corner_radius=0)
         paned.pack(fill="both", expand=True)
 
@@ -345,7 +340,7 @@ class StudentDetailPanel(ctk.CTkFrame):
         cf = ChartFrame(parent)
         cf.pack(fill="both", expand=True, padx=8, pady=8)
         n_assigns = len(self._analysis.get("assignments", []))
-        # Altura dinámica: 0.45 por tarea, mínimo 5, máximo 20 pulgadas (zoom disponible)
+        # Dynamic height: 0.45 per assignment, from 5 to 20 inches, with zoom available
         fig_h = max(5.0, min(20.0, n_assigns * 0.45 + 1.5))
         cf.show_figure(charts_student.chart_student_submissions_timeline(
             self._student.get("submissions", []),
@@ -375,10 +370,7 @@ class StudentDetailPanel(ctk.CTkFrame):
                 anchor="w", padx=12, pady=(0, 10))
 
     def _build_tab_percentile(self, parent):
-        """
-        Gráfica de barras horizontales con el percentil del alumno
-        en cada métrica respecto al resto de la clase.
-        """
+        """Build a horizontal chart of the student's percentile for each metric."""
         all_students = self._analysis.get("students", [])
         cf = ChartFrame(parent)
         cf.pack(fill="both", expand=True, padx=8, pady=8)
