@@ -142,3 +142,9 @@ prepare_web_release.bat
 ```bash
 python -m unittest discover -s tests
 ```
+
+## License
+
+Copyright (C) 2026 Pablo Gallego.
+
+This project is free software released under the GNU General Public License version 3 or later. See `LICENSE`.
