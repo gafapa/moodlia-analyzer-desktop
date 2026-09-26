@@ -3,6 +3,9 @@ name: Build macOS Apple Silicon
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-mac-arm64:
     runs-on: macos-latest
